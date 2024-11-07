@@ -1,4 +1,5 @@
-use hyper::Uri;
+use http_body_util::Empty;
+use hyper::{body::Bytes, Request, Uri};
 use hyper_connect::proxy::HttpProxyClient;
 use std::env;
 
@@ -10,7 +11,7 @@ async fn main() {
     let proxy_username = env::var("PROXY_USERNAME").expect("Proxy username not found");
     let proxy_password = env::var("PROXY_PASSWORD").expect("Proxy password not found");
 
-    let client = HttpProxyClient::new(proxy_address, proxy_username, proxy_password);
+    let mut client = HttpProxyClient::new(proxy_address, proxy_username, proxy_password);
 
     let target = Uri::builder()
         .scheme("https")
@@ -19,8 +20,13 @@ async fn main() {
         .build()
         .unwrap();
 
-    match client.get(&target).await {
-        Ok(_) => {}
+    let request = Request::builder()
+        .uri(target.authority().unwrap().as_str())
+        .body(Empty::<Bytes>::new())
+        .unwrap();
+
+    match client.request(&target, request).await {
+        Ok((s, b)) => println!("{}: {}", s, b.len()),
         Err(e) => println!("{}", e),
     }
 }
