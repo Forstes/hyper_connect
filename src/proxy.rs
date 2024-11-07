@@ -1,8 +1,8 @@
 use crate::http::establish_http1_conn;
 use base64::engine::general_purpose;
 use base64::Engine;
+use bytes::Bytes;
 use core::str;
-use futures::future::try_join_all;
 use http_body_util::BodyExt;
 use hyper::body::Body;
 use hyper::client::conn::http1::SendRequest;
@@ -11,6 +11,7 @@ use std::error::Error;
 use std::sync::Arc;
 use tokio::net::TcpStream;
 use tokio::sync::Mutex;
+use tokio::task::JoinSet;
 
 pub struct HttpProxyClient<B> {
     address: String,
@@ -57,41 +58,38 @@ impl<B: Body + 'static + Unpin + Send> HttpProxyClient<B> {
         &mut self,
         uri: &Uri,
         requests: Vec<Request<B>>,
-    ) -> Result<Vec<(StatusCode, bytes::Bytes)>, anyhow::Error>
+    ) -> Result<Vec<(StatusCode, Bytes)>, anyhow::Error>
     where
+        B: Body + 'static + Unpin + Send,
         B::Data: Send,
         B::Error: Into<Box<dyn Error + Send + Sync>>,
     {
         self.ensure_connection(uri).await?;
 
         if let Some(conn) = &self.conn {
-            let response_futures = requests.into_iter().map(|request| {
+            let mut join_set: JoinSet<Result<(StatusCode, Bytes), anyhow::Error>> = JoinSet::new();
+
+            for request in requests {
                 let conn_clone = conn.clone();
-                async move {
+                join_set.spawn(async move {
                     let mut conn = conn_clone.lock().await;
                     let resp = conn.send_request(request).await?;
                     let status = resp.status();
                     let collected = resp.into_body().collect().await?;
-                    Ok((status, collected.to_bytes())) as Result<_, anyhow::Error>
-                }
-            });
+                    Ok((status, collected.to_bytes()))
+                });
+            }
 
-            try_join_all(response_futures).await
+            let mut results = Vec::with_capacity(join_set.len());
+            while let Some(result) = join_set.join_next().await {
+                results.push(result??);
+            }
+
+            Ok(results)
         } else {
             Err(anyhow::anyhow!("No active connection"))
         }
     }
-
-    /*     async fn process_request(
-        &self,
-        conn: &mut SendRequest<B>,
-        request: Request<B>,
-    ) -> Result<(StatusCode, bytes::Bytes), anyhow::Error> {
-        let resp = conn.send_request(request).await?;
-        let status = resp.status();
-        let collected = resp.into_body().collect().await?;
-        Ok((status, collected.to_bytes()))
-    } */
 
     async fn ensure_connection(&mut self, uri: &Uri) -> Result<(), anyhow::Error>
     where
