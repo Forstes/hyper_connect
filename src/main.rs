@@ -25,8 +25,15 @@ async fn main() {
         .body(Empty::<Bytes>::new())
         .unwrap();
 
-    match client.request(&target, request).await {
-        Ok((s, b)) => println!("{}: {}", s, b.len()),
+    match client
+        .request_many(&target, vec![request.clone(), request])
+        .await
+    {
+        Ok(res) => {
+            for (s, b) in res {
+                println!("{}: {}", s, b.len());
+            }
+        }
         Err(e) => println!("{}", e),
     }
 }

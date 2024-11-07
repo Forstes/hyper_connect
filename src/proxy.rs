@@ -2,18 +2,21 @@ use crate::http::establish_http1_conn;
 use base64::engine::general_purpose;
 use base64::Engine;
 use core::str;
+use futures::future::try_join_all;
 use http_body_util::BodyExt;
 use hyper::body::Body;
 use hyper::client::conn::http1::SendRequest;
 use hyper::{Request, StatusCode, Uri};
 use std::error::Error;
+use std::sync::Arc;
 use tokio::net::TcpStream;
+use tokio::sync::Mutex;
 
 pub struct HttpProxyClient<B> {
     address: String,
     username: String,
     password: String,
-    conn: Option<SendRequest<B>>,
+    conn: Option<Arc<Mutex<SendRequest<B>>>>,
     last_authority: String,
 }
 
@@ -37,18 +40,11 @@ impl<B: Body + 'static + Unpin + Send> HttpProxyClient<B> {
         B::Data: Send,
         B::Error: Into<Box<dyn Error + Send + Sync>>,
     {
-        if self.conn.is_none() || !self.last_authority.eq(uri.authority().unwrap().as_str()) {
-            self.refresh_connection(uri).await?;
-        }
+        self.ensure_connection(uri).await?;
 
         if let Some(c) = &self.conn {
-            if c.is_closed() {
-                self.refresh_connection(uri).await?;
-            }
-        }
-
-        if let Some(c) = &mut self.conn {
-            let resp = c.send_request(request).await?;
+            let mut conn = c.lock().await;
+            let resp = conn.send_request(request).await?;
             let status = resp.status();
             let collected = resp.into_body().collect().await?;
             return Ok((status, collected.to_bytes()));
@@ -57,13 +53,71 @@ impl<B: Body + 'static + Unpin + Send> HttpProxyClient<B> {
         Err(anyhow::anyhow!("Couldn't find a connection"))
     }
 
+    pub async fn request_many(
+        &mut self,
+        uri: &Uri,
+        requests: Vec<Request<B>>,
+    ) -> Result<Vec<(StatusCode, bytes::Bytes)>, anyhow::Error>
+    where
+        B::Data: Send,
+        B::Error: Into<Box<dyn Error + Send + Sync>>,
+    {
+        self.ensure_connection(uri).await?;
+
+        if let Some(conn) = &self.conn {
+            let response_futures = requests.into_iter().map(|request| {
+                let conn_clone = conn.clone();
+                async move {
+                    let mut conn = conn_clone.lock().await;
+                    let resp = conn.send_request(request).await?;
+                    let status = resp.status();
+                    let collected = resp.into_body().collect().await?;
+                    Ok((status, collected.to_bytes())) as Result<_, anyhow::Error>
+                }
+            });
+
+            try_join_all(response_futures).await
+        } else {
+            Err(anyhow::anyhow!("No active connection"))
+        }
+    }
+
+    /*     async fn process_request(
+        &self,
+        conn: &mut SendRequest<B>,
+        request: Request<B>,
+    ) -> Result<(StatusCode, bytes::Bytes), anyhow::Error> {
+        let resp = conn.send_request(request).await?;
+        let status = resp.status();
+        let collected = resp.into_body().collect().await?;
+        Ok((status, collected.to_bytes()))
+    } */
+
+    async fn ensure_connection(&mut self, uri: &Uri) -> Result<(), anyhow::Error>
+    where
+        B::Data: Send,
+        B::Error: Into<Box<dyn Error + Send + Sync>>,
+    {
+        if self.conn.is_none() || !self.last_authority.eq(uri.authority().unwrap().as_str()) {
+            self.refresh_connection(uri).await?;
+        }
+
+        if let Some(c) = &self.conn {
+            if c.lock().await.is_closed() {
+                self.refresh_connection(uri).await?;
+            }
+        }
+        Ok(())
+    }
+
     async fn refresh_connection(&mut self, uri: &Uri) -> Result<(), anyhow::Error>
     where
         B::Data: Send,
         B::Error: Into<Box<dyn Error + Send + Sync>>,
     {
         let tcp_stream = self.create_tunnel(uri).await?;
-        self.conn = Some(establish_http1_conn(tcp_stream, uri.host().unwrap().to_string()).await?);
+        let conn = establish_http1_conn(tcp_stream, uri.host().unwrap().to_string()).await?;
+        self.conn = Some(Arc::new(Mutex::new(conn)));
         self.last_authority = uri.authority().unwrap().to_string();
         Ok(())
     }
