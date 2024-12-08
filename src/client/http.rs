@@ -1,42 +1,25 @@
 use bytes::Bytes;
 use hyper::body::Body;
-use hyper::client::conn::http2::SendRequest;
 use hyper::{Request, StatusCode, Uri};
-use std::error::Error;
-use std::sync::Arc;
-use tokio::sync::Mutex;
 use tokio::task::JoinSet;
 
-pub trait Http2Connector<B>
-where
-    B: Body + 'static + Unpin + Send,
-    B::Data: Send,
-    B::Error: Into<Box<dyn Error + Send + Sync>>,
-{
-    async fn refresh_connection(&mut self, uri: &Uri) -> Result<(), anyhow::Error>;
-    async fn create_tunnel(&self, uri: &Uri) -> Result<SendRequest<B>, anyhow::Error>;
-}
+use crate::connectors::enums::SendRequestEnum;
 
 /// Generic handler for connecton & request sending
-pub struct HttpHandler<B, C>
-where
-    C: HttpClient<B> + Send + Sync,
-{
-    client: C,
-    conn: Option<Arc<Mutex<hyper::client::conn::http1::SendRequest<B>>>>,
+pub struct HttpHandler<B: Body + 'static> {
+    connector: SendRequestEnum<B>,
+    conn: Option<SendRequest<B>>,
     last_authority: String,
 }
 
-impl<B, C> HttpClient<B, C>
+impl<B> HttpHandler<B>
 where
     B: Body + 'static + Unpin + Send,
     B::Data: Send,
     B::Error: Into<Box<dyn std::error::Error + Send + Sync>>,
-    C: HttpClient<B> + Send + Sync,
 {
     pub fn new(client: C) -> Self {
         Self {
-            client,
             conn: None,
             last_authority: String::new(),
         }
