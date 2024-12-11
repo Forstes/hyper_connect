@@ -1,14 +1,17 @@
+use crate::connectors::enums::connector::ConnectorEnum;
+use crate::connectors::enums::send_request::SendRequestEnum;
 use bytes::Bytes;
+use http_body_util::BodyExt;
 use hyper::body::Body;
 use hyper::{Request, StatusCode, Uri};
+use std::sync::Arc;
+use tokio::sync::Mutex;
 use tokio::task::JoinSet;
-
-use crate::connectors::enums::SendRequestEnum;
 
 /// Generic handler for connecton & request sending
 pub struct HttpHandler<B: Body + 'static> {
-    connector: SendRequestEnum<B>,
-    conn: Option<SendRequest<B>>,
+    connector: ConnectorEnum,
+    connection: Option<Arc<Mutex<SendRequestEnum<B>>>>,
     last_authority: String,
 }
 
@@ -18,9 +21,10 @@ where
     B::Data: Send,
     B::Error: Into<Box<dyn std::error::Error + Send + Sync>>,
 {
-    pub fn new(client: C) -> Self {
+    pub fn new(connector: ConnectorEnum) -> Self {
         Self {
-            conn: None,
+            connector,
+            connection: None,
             last_authority: String::new(),
         }
     }
@@ -32,7 +36,7 @@ where
     ) -> Result<(StatusCode, Bytes), anyhow::Error> {
         self.ensure_connection(uri).await?;
 
-        if let Some(c) = &self.conn {
+        if let Some(c) = &self.connection {
             let mut conn = c.lock().await;
             let resp = conn.send_request(request).await?;
             let status = resp.status();
@@ -50,7 +54,7 @@ where
     ) -> Result<Vec<(StatusCode, Bytes)>, anyhow::Error> {
         self.ensure_connection(uri).await?;
 
-        if let Some(conn) = &self.conn {
+        if let Some(conn) = &self.connection {
             let mut join_set: JoinSet<Result<(StatusCode, Bytes), anyhow::Error>> = JoinSet::new();
 
             for request in requests {
@@ -76,14 +80,19 @@ where
     }
 
     async fn ensure_connection(&mut self, uri: &Uri) -> Result<(), anyhow::Error> {
-        if self.conn.is_none() || !self.last_authority.eq(uri.authority().unwrap().as_str()) {
-            self.client.refresh_connection(uri).await?;
-        }
-
-        if let Some(c) = &self.conn {
-            if c.lock().await.is_closed() {
-                self.client.refresh_connection(uri).await?;
+        if let Some(c) = &self.connection {
+            if !self.last_authority.eq(uri.authority().unwrap().as_str())
+                || !c.lock().await.is_conn_ready()
+            {
+                self.connection = Some(Arc::new(Mutex::new(
+                    self.connector.create_connection(uri).await?,
+                )));
+                self.last_authority = uri.authority().unwrap().as_str().to_string();
             }
+        } else {
+            self.connection = Some(Arc::new(Mutex::new(
+                self.connector.create_connection(uri).await?,
+            )));
         }
         Ok(())
     }

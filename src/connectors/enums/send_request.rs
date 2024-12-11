@@ -1,6 +1,7 @@
 use hyper::{
+    body::Body,
     client::conn::{http1, http2},
-    body::Body, Request, Response,
+    Request, Response,
 };
 
 pub enum SendRequestEnum<B>
@@ -25,10 +26,10 @@ where
         }
     }
 
-    pub async fn is_conn_closed(&self) -> bool {
+    pub fn is_conn_ready(&self) -> bool {
         match self {
-            SendRequestEnum::Http1(ref sender) => sender.is_closed(),
-            SendRequestEnum::Http2(ref sender) => sender.is_closed(),
+            SendRequestEnum::Http1(ref sender) => sender.is_ready(),
+            SendRequestEnum::Http2(ref sender) => sender.is_ready(),
         }
     }
 }
