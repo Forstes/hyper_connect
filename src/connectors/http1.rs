@@ -1,13 +1,13 @@
 use super::enums::send_request::SendRequestEnum;
 use crate::tls::create_tls_connector;
-use hyper::{body::Body, client::conn::http2, Uri};
+use hyper::{body::Body, client::conn::http1, Uri};
 use hyper_util::rt::TokioIo;
 use std::time::Duration;
 use tokio::{net::TcpStream, time::timeout};
 
-pub struct SimpleHttp2Connector {}
+pub struct SimpleHttp1Connector {}
 
-impl SimpleHttp2Connector {
+impl SimpleHttp1Connector {
     pub async fn create_connection<B>(&self, uri: &Uri) -> Result<SendRequestEnum<B>, anyhow::Error>
     where
         B: Body + 'static + Unpin + Send,
@@ -27,20 +27,16 @@ impl SimpleHttp2Connector {
         let domain =
             tokio_rustls::rustls::pki_types::ServerName::try_from(uri.host().unwrap().to_string())?;
         let tls_stream = TokioIo::new(tls.connect(domain, tcp_stream).await?);
-        let executor = hyper_util::rt::tokio::TokioExecutor::new();
 
-        let (sender, connection) = timeout(
-            Duration::from_secs(5),
-            http2::handshake(executor, tls_stream),
-        )
-        .await??;
+        let (sender, connection) =
+            timeout(Duration::from_secs(5), http1::handshake(tls_stream)).await??;
 
         tokio::task::spawn(async move {
             if let Err(e) = connection.await {
-                eprintln!("HTTP/2 connection error: {}", e);
+                eprintln!("HTTP/1 connection error: {}", e);
             }
         });
 
-        Ok(SendRequestEnum::Http2(sender))
+        Ok(SendRequestEnum::Http1(sender))
     }
 }

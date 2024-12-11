@@ -1,8 +1,9 @@
 use super::send_request::SendRequestEnum;
-use crate::connectors::http2::SimpleHttp2Connector;
+use crate::connectors::{http1::SimpleHttp1Connector, http2::SimpleHttp2Connector};
 use hyper::{body::Body, Uri};
 
 pub enum ConnectorEnum {
+    Http1(SimpleHttp1Connector),
     Http2(SimpleHttp2Connector),
 }
 
@@ -14,6 +15,7 @@ impl ConnectorEnum {
         B::Error: Into<Box<dyn std::error::Error + Send + Sync>>,
     {
         match self {
+            ConnectorEnum::Http1(connector) => connector.create_connection(uri).await,
             ConnectorEnum::Http2(connector) => connector.create_connection(uri).await,
         }
     }
