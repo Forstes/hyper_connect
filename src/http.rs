@@ -20,7 +20,7 @@ where
     B::Data: Send,
     B::Error: Into<Box<dyn Error + Send + Sync>>,
 {
-    let tls = create_tls_connector();
+    let tls = create_tls_connector(false);
     let domain = tokio_rustls::rustls::pki_types::ServerName::try_from(domain)?;
     let tls_stream = TokioIo::new(tls.connect(domain, stream).await?);
 

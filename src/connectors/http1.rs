@@ -23,7 +23,7 @@ impl SimpleHttp1Connector {
         };
 
         let tcp_stream = TcpStream::connect(socket_address).await?;
-        let tls = create_tls_connector();
+        let tls = create_tls_connector(false);
         let domain =
             tokio_rustls::rustls::pki_types::ServerName::try_from(uri.host().unwrap().to_string())?;
         let tls_stream = TokioIo::new(tls.connect(domain, tcp_stream).await?);

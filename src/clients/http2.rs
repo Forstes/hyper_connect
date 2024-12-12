@@ -24,6 +24,7 @@ impl Http2Client {
             .method(Method::GET)
             .uri(uri)
             .header("User-Agent", "RustHttp2Client/1.0")
+            .header(hyper::header::HOST, uri.authority().unwrap().as_str())
             .body(Either::Right(Empty::<Bytes>::new()))
             .expect("Failed to build GET request");
         self.handle_request(request).await
