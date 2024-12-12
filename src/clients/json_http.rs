@@ -1,7 +1,10 @@
+use std::collections::HashMap;
+
 use crate::handlers::http::HttpHandler;
 use bytes::Bytes;
 use http_body_util::{Either, Empty, Full};
 use hyper::{Method, Request, Uri};
+use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 
@@ -27,7 +30,6 @@ pub async fn request<T: DeserializeOwned>(
     }
 
     let request = builder.body(body_data).expect("Failed to build request");
-    println!("Sending request: {:?}", request);
     let uri = request.uri().clone();
     let (status, body) = handler.request(&uri, request).await?;
 
@@ -41,4 +43,25 @@ pub async fn request<T: DeserializeOwned>(
             String::from_utf8_lossy(&body)
         ))
     }
+}
+
+pub fn build_uri_with_params(base_uri: &Uri, params: Option<HashMap<String, String>>) -> Uri {
+    let path = base_uri.path();
+    let mut parts = base_uri.clone().into_parts();
+
+    if let Some(params) = params {
+        let query = params
+            .into_iter()
+            .map(|(key, value)| {
+                let encoded_key = utf8_percent_encode(&key, NON_ALPHANUMERIC).to_string();
+                let encoded_value = utf8_percent_encode(&value, NON_ALPHANUMERIC).to_string();
+                format!("{}={}", encoded_key, encoded_value)
+            })
+            .collect::<Vec<String>>()
+            .join("&");
+
+        parts.path_and_query = Some(format!("{}?{}", path, query).parse().unwrap());
+    }
+
+    Uri::from_parts(parts).expect("Failed to build URI with query parameters")
 }

@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use super::json_http;
 use crate::{
     connectors::{enums::connector::ConnectorEnum, http1::SimpleHttp1Connector},
@@ -19,7 +21,12 @@ impl Http1Client {
         Self { handler }
     }
 
-    pub async fn get<T: DeserializeOwned>(&mut self, uri: &Uri) -> Result<T, anyhow::Error> {
+    pub async fn get<T: DeserializeOwned>(
+        &mut self,
+        uri: &Uri,
+        params: Option<HashMap<String, String>>,
+    ) -> Result<T, anyhow::Error> {
+        let uri = json_http::build_uri_with_params(uri, params);
         json_http::request(&mut self.handler, &uri, Method::GET, None).await
     }
 }
