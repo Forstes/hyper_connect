@@ -27,6 +27,6 @@ impl Http1Client {
         params: Option<HashMap<String, String>>,
     ) -> Result<T, anyhow::Error> {
         let uri = json_http::build_uri_with_params(uri, params);
-        json_http::request(&mut self.handler, &uri, Method::GET, None).await
+        json_http::request(&mut self.handler, &uri, Method::GET, None, None).await
     }
 }

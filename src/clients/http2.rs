@@ -34,28 +34,35 @@ impl Http2Client {
         &mut self,
         uri: &Uri,
         params: Option<HashMap<String, String>>,
+        headers: Option<Vec<(String, String)>>,
     ) -> Result<T, anyhow::Error> {
         let uri = json_http::build_uri_with_params(uri, params);
-        json_http::request(&mut self.handler, &uri, Method::GET, None).await
+        json_http::request(&mut self.handler, &uri, Method::GET, None, headers).await
     }
 
     pub async fn post<T: DeserializeOwned>(
         &mut self,
         uri: &Uri,
         body: Value,
+        headers: Option<Vec<(String, String)>>,
     ) -> Result<T, anyhow::Error> {
-        json_http::request(&mut self.handler, &uri, Method::POST, Some(body)).await
+        json_http::request(&mut self.handler, &uri, Method::POST, Some(body), headers).await
     }
 
     pub async fn put<T: DeserializeOwned>(
         &mut self,
         uri: &Uri,
         body: Value,
+        headers: Option<Vec<(String, String)>>,
     ) -> Result<T, anyhow::Error> {
-        json_http::request(&mut self.handler, &uri, Method::PUT, Some(body)).await
+        json_http::request(&mut self.handler, &uri, Method::PUT, Some(body), headers).await
     }
 
-    pub async fn delete<T: DeserializeOwned>(&mut self, uri: &Uri) -> Result<T, anyhow::Error> {
-        json_http::request(&mut self.handler, &uri, Method::DELETE, None).await
+    pub async fn delete<T: DeserializeOwned>(
+        &mut self,
+        uri: &Uri,
+        headers: Option<Vec<(String, String)>>,
+    ) -> Result<T, anyhow::Error> {
+        json_http::request(&mut self.handler, &uri, Method::DELETE, None, headers).await
     }
 }

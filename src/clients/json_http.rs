@@ -12,6 +12,7 @@ pub async fn request<T: DeserializeOwned>(
     uri: &Uri,
     method: Method,
     body: Option<Value>,
+    headers: Option<Vec<(String, String)>>,
 ) -> Result<T, anyhow::Error> {
     let body_data: Either<Full<Bytes>, Empty<Bytes>> = match body {
         Some(b) => Either::Left(Full::from(b.to_string())),
@@ -23,6 +24,12 @@ pub async fn request<T: DeserializeOwned>(
         .uri(uri)
         .header("User-Agent", "RustClient/1.0")
         .header(hyper::header::HOST, uri.authority().unwrap().as_str());
+
+    if let Some(header_list) = headers {
+        for (key, value) in header_list {
+            builder = builder.header(key, value);
+        }
+    }
 
     if method != Method::GET {
         builder = builder.header("Content-Type", "application/json")
