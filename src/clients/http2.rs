@@ -43,19 +43,19 @@ impl Http2Client {
     pub async fn post<T: DeserializeOwned>(
         &mut self,
         uri: &Uri,
-        body: Value,
+        body: Option<Value>,
         headers: Option<Vec<(String, String)>>,
     ) -> Result<T, anyhow::Error> {
-        json_http::request(&mut self.handler, &uri, Method::POST, Some(body), headers).await
+        json_http::request(&mut self.handler, &uri, Method::POST, body, headers).await
     }
 
     pub async fn put<T: DeserializeOwned>(
         &mut self,
         uri: &Uri,
-        body: Value,
+        body: Option<Value>,
         headers: Option<Vec<(String, String)>>,
     ) -> Result<T, anyhow::Error> {
-        json_http::request(&mut self.handler, &uri, Method::PUT, Some(body), headers).await
+        json_http::request(&mut self.handler, &uri, Method::PUT, body, headers).await
     }
 
     pub async fn delete<T: DeserializeOwned>(
