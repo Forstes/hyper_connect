@@ -1,5 +1,5 @@
 use super::enums::send_request::SendRequestEnum;
-use crate::tls::create_tls_connector;
+use crate::utils::tls::create_tls_connector;
 use hyper::{body::Body, client::conn::http1, Uri};
 use hyper_util::rt::TokioIo;
 use std::time::Duration;
@@ -24,12 +24,10 @@ impl SimpleHttp1Connector {
 
         let tcp_stream = TcpStream::connect(socket_address).await?;
         let tls = create_tls_connector(false);
-        let domain =
-            tokio_rustls::rustls::pki_types::ServerName::try_from(uri.host().unwrap().to_string())?;
+        let domain = tokio_rustls::rustls::pki_types::ServerName::try_from(uri.host().unwrap().to_string())?;
         let tls_stream = TokioIo::new(tls.connect(domain, tcp_stream).await?);
 
-        let (sender, connection) =
-            timeout(Duration::from_secs(5), http1::handshake(tls_stream)).await??;
+        let (sender, connection) = timeout(Duration::from_secs(5), http1::handshake(tls_stream)).await??;
 
         tokio::task::spawn(async move {
             if let Err(e) = connection.await {
