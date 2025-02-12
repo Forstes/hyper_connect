@@ -1,8 +1,7 @@
-use std::collections::HashMap;
-
 use hyper::Uri;
 use hyper_connect::clients::http1::Http1Client;
 use serde_json::Value;
+use std::collections::HashMap;
 
 #[tokio::test]
 async fn test_http1() {

@@ -400,6 +400,7 @@ dependencies = [
  "http-body-util",
  "hyper",
  "hyper-util",
+ "hyper_connect",
  "percent-encoding",
  "rustls-pki-types",
  "serde",
