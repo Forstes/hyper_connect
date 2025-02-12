@@ -29,11 +29,7 @@ where
         }
     }
 
-    pub async fn request(
-        &mut self,
-        uri: &Uri,
-        request: Request<B>,
-    ) -> Result<(StatusCode, Bytes), anyhow::Error> {
+    pub async fn request(&mut self, uri: &Uri, request: Request<B>) -> Result<(StatusCode, Bytes), anyhow::Error> {
         self.ensure_connection(uri).await?;
 
         if let Some(c) = &self.connection {
@@ -81,18 +77,12 @@ where
 
     async fn ensure_connection(&mut self, uri: &Uri) -> Result<(), anyhow::Error> {
         if let Some(c) = &self.connection {
-            if !self.last_authority.eq(uri.authority().unwrap().as_str())
-                || !c.lock().await.is_conn_ready()
-            {
-                self.connection = Some(Arc::new(Mutex::new(
-                    self.connector.create_connection(uri).await?,
-                )));
+            if !self.last_authority.eq(uri.authority().unwrap().as_str()) || !c.lock().await.is_conn_ready() {
+                self.connection = Some(Arc::new(Mutex::new(self.connector.create_connection(uri).await?)));
                 self.last_authority = uri.authority().unwrap().as_str().to_string();
             }
         } else {
-            self.connection = Some(Arc::new(Mutex::new(
-                self.connector.create_connection(uri).await?,
-            )));
+            self.connection = Some(Arc::new(Mutex::new(self.connector.create_connection(uri).await?)));
         }
         Ok(())
     }

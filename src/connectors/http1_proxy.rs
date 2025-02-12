@@ -2,18 +2,18 @@ use super::enums::send_request::SendRequestEnum;
 use crate::tls::create_tls_connector;
 use base64::{engine::general_purpose, Engine};
 use core::str;
-use hyper::{body::Body, client::conn::http2, Uri};
+use hyper::{body::Body, client::conn::http1, Uri};
 use hyper_util::rt::TokioIo;
 use std::time::Duration;
 use tokio::{net::TcpStream, time::timeout};
 
-pub struct ProxyHttp2Connector {
+pub struct ProxyHttp1Connector {
     pub proxy_address: String,
     pub username: String,
     pub password: String,
 }
 
-impl ProxyHttp2Connector {
+impl ProxyHttp1Connector {
     pub fn new(proxy_address: String, username: String, password: String) -> Self {
         Self {
             proxy_address,
@@ -37,20 +37,19 @@ impl ProxyHttp2Connector {
         let tcp_stream = self
             .create_proxy_tunnel(target_uri, proxy_address, username, password)
             .await?;
-        let tls = create_tls_connector(true);
+        let tls = create_tls_connector(false);
         let domain = tokio_rustls::rustls::pki_types::ServerName::try_from(target_uri.host().unwrap().to_string())?;
         let tls_stream = TokioIo::new(tls.connect(domain, tcp_stream).await?);
-        let executor = hyper_util::rt::tokio::TokioExecutor::new();
 
-        let (sender, connection) = timeout(Duration::from_secs(5), http2::handshake(executor, tls_stream)).await??;
+        let (sender, connection) = timeout(Duration::from_secs(5), http1::handshake(tls_stream)).await??;
 
         tokio::task::spawn(async move {
             if let Err(e) = connection.await {
-                eprintln!("HTTP/2 connection error: {}", e);
+                eprintln!("HTTP/1 connection error: {}", e);
             }
         });
 
-        Ok(SendRequestEnum::Http2(sender))
+        Ok(SendRequestEnum::Http1(sender))
     }
 
     async fn create_proxy_tunnel(
@@ -67,7 +66,7 @@ impl ProxyHttp2Connector {
         let encoded_credentials = general_purpose::STANDARD.encode(format!("{}:{}", username, password));
 
         let connect_request = format!(
-            "CONNECT {0}:{1} HTTP/2.0\r\n\
+            "CONNECT {0}:{1} HTTP/1.1\r\n\
              Host: {0}:{1}\r\n\
              Proxy-Authorization: Basic {2}\r\n\
              \r\n",
