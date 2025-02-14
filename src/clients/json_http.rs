@@ -22,8 +22,7 @@ pub async fn request<T: DeserializeOwned>(
     let mut builder = Request::builder()
         .method(&method)
         .uri(uri)
-        .header("User-Agent", "RustClient/1.0")
-        .header(hyper::header::HOST, uri.authority().unwrap().as_str());
+        .header("User-Agent", "RustClient/1.0");
 
     if let Some(header_list) = headers {
         for (key, value) in header_list {
@@ -93,11 +92,7 @@ pub async fn request_batch<T: DeserializeOwned>(
                 }
             }
         } else {
-            let error_message = anyhow::anyhow!(
-                "Request failed with status {}: {}",
-                status,
-                String::from_utf8_lossy(&body)
-            );
+            let error_message = anyhow::anyhow!("Request failed with status {}: {}", status, String::from_utf8_lossy(&body));
             results.push((None, Some(error_message)));
         }
     }
