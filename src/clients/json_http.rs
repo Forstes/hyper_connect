@@ -5,11 +5,10 @@ use hyper::{Method, Request, Uri};
 use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
 use serde::de::DeserializeOwned;
 use serde_json::Value;
-use std::collections::HashMap;
 
 pub async fn request<T: DeserializeOwned>(
     handler: &mut HttpHandler<Either<Full<Bytes>, Empty<Bytes>>>,
-    uri: &Uri,
+    uri: &str,
     method: Method,
     body: Option<Value>,
     headers: Option<Vec<(String, String)>>,
@@ -100,23 +99,31 @@ pub async fn request_batch<T: DeserializeOwned>(
     Ok(results)
 }
 
-pub fn build_uri_with_params(base_uri: &Uri, params: Option<HashMap<String, String>>) -> Uri {
-    let path = base_uri.path();
-    let mut parts = base_uri.clone().into_parts();
-
+pub fn build_uri_with_params(base_uri: &str, params: Option<Value>) -> anyhow::Result<String> {
     if let Some(params) = params {
-        let query = params
-            .into_iter()
-            .map(|(key, value)| {
-                let encoded_key = utf8_percent_encode(&key, NON_ALPHANUMERIC).to_string();
-                let encoded_value = utf8_percent_encode(&value, NON_ALPHANUMERIC).to_string();
-                format!("{}={}", encoded_key, encoded_value)
-            })
-            .collect::<Vec<String>>()
-            .join("&");
+        if let Value::Object(ref obj) = params {
+            let query = obj
+                .iter()
+                .map(|(key, val)| {
+                    let value_str = match val {
+                        Value::String(s) => s.clone(),
+                        _ => val.to_string(),
+                    };
 
-        parts.path_and_query = Some(format!("{}?{}", path, query).parse().unwrap());
+                    format!(
+                        "{}={}",
+                        utf8_percent_encode(key, NON_ALPHANUMERIC),
+                        utf8_percent_encode(&value_str, NON_ALPHANUMERIC)
+                    )
+                })
+                .collect::<Vec<String>>()
+                .join("&");
+
+            return Ok(format!("{}?{}", base_uri, query));
+        }
+
+        return Err(anyhow::anyhow!("params must be an object"));
     }
 
-    Uri::from_parts(parts).expect("Failed to build URI with query parameters")
+    Ok(base_uri.to_string())
 }

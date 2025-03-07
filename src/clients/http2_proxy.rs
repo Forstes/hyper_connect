@@ -8,7 +8,6 @@ use http_body_util::{Either, Empty, Full};
 use hyper::{Method, Uri};
 use serde::de::DeserializeOwned;
 use serde_json::Value;
-use std::collections::HashMap;
 
 pub struct Http2ProxyClient {
     handler: HttpHandler<Either<Full<Bytes>, Empty<Bytes>>>,
@@ -32,37 +31,37 @@ impl Http2ProxyClient {
 
     pub async fn get<T: DeserializeOwned>(
         &mut self,
-        uri: &Uri,
-        params: Option<HashMap<String, String>>,
+        uri: &str,
+        params: Option<Value>,
         headers: Option<Vec<(String, String)>>,
     ) -> Result<T, anyhow::Error> {
-        let uri = json_http::build_uri_with_params(uri, params);
+        let uri = json_http::build_uri_with_params(uri, params)?;
         json_http::request(&mut self.handler, &uri, Method::GET, None, headers).await
     }
 
     pub async fn post<T: DeserializeOwned>(
         &mut self,
-        uri: &Uri,
+        uri: &str,
         body: Option<Value>,
         headers: Option<Vec<(String, String)>>,
     ) -> Result<T, anyhow::Error> {
-        json_http::request(&mut self.handler, &uri, Method::POST, body, headers).await
+        json_http::request(&mut self.handler, uri, Method::POST, body, headers).await
     }
 
     pub async fn put<T: DeserializeOwned>(
         &mut self,
-        uri: &Uri,
+        uri: &str,
         body: Option<Value>,
         headers: Option<Vec<(String, String)>>,
     ) -> Result<T, anyhow::Error> {
-        json_http::request(&mut self.handler, &uri, Method::PUT, body, headers).await
+        json_http::request(&mut self.handler, uri, Method::PUT, body, headers).await
     }
 
     pub async fn delete<T: DeserializeOwned>(
         &mut self,
-        uri: &Uri,
+        uri: &str,
         headers: Option<Vec<(String, String)>>,
     ) -> Result<T, anyhow::Error> {
-        json_http::request(&mut self.handler, &uri, Method::DELETE, None, headers).await
+        json_http::request(&mut self.handler, uri, Method::DELETE, None, headers).await
     }
 }

@@ -1,4 +1,3 @@
-use hyper::Uri;
 use hyper_connect::clients::http1_proxy::Http1ProxyClient;
 use serde_json::Value;
 
@@ -10,9 +9,10 @@ async fn test_request() {
         "1p487vhyxa6s".to_string(),
     );
 
-    let uri = Uri::from_static("http://www.randomnumberapi.com/api/v1.0/random");
-
-    let resp = client.get::<Value>(&uri, None, None).await.expect("Request failed");
+    let resp = client
+        .get::<Value>("http://www.randomnumberapi.com/api/v1.0/random", None, None)
+        .await
+        .expect("Request failed");
 
     println!("{}", resp);
 }
