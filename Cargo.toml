@@ -7,7 +7,6 @@ edition = "2021"
 anyhow = "1.0.92"
 base64 = "0.22.1"
 bytes = "1.8.0"
-dotenvy = "0.15.7"
 http-body-util = "0.1.2"
 hyper = { version = "1.5.0", features = ["client", "http1", "http2"] }
 hyper-util = { version = "0.1.10", features = ["tokio"] }
@@ -29,3 +28,4 @@ http2_proxy = []
 
 [dev-dependencies]
 hyper_connect = { path = ".", features = ["full"] }
+dotenvy = "0.15.7"

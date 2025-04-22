@@ -20,19 +20,13 @@ impl ProxyHttp1Connector {
         }
     }
 
-    pub async fn create_connection<B>(
-        &self,
-        target_uri: &Uri,
-        proxy_address: &String,
-        username: &String,
-        password: &String,
-    ) -> Result<SendRequestEnum<B>, anyhow::Error>
+    pub async fn create_connection<B>(&self, target_uri: &Uri) -> Result<SendRequestEnum<B>, anyhow::Error>
     where
         B: Body + 'static + Unpin + Send,
         B::Data: Send,
         B::Error: Into<Box<dyn std::error::Error + Send + Sync>>,
     {
-        let tcp_stream = create_proxy_tunnel(target_uri, proxy_address, username, password, "1.1").await?;
+        let tcp_stream = create_proxy_tunnel(target_uri, &self.proxy_address, &self.username, &self.password, "1.1").await?;
         let tls = create_tls_connector(false);
         let domain = tokio_rustls::rustls::pki_types::ServerName::try_from(target_uri.host().unwrap().to_string())?;
         let tls_stream = TokioIo::new(tls.connect(domain, tcp_stream).await?);
