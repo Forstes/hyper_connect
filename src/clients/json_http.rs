@@ -12,16 +12,23 @@ pub async fn request<T: DeserializeOwned>(
     method: Method,
     body: Option<Value>,
     headers: Option<Vec<(String, String)>>,
+    inlcude_host_header: bool,
 ) -> Result<T, anyhow::Error> {
     let body_data: Either<Full<Bytes>, Empty<Bytes>> = match body {
         Some(b) => Either::Left(Full::from(b.to_string())),
         None => Either::Right(Empty::<Bytes>::new()),
     };
 
+    let uri = Uri::try_from(uri)?;
+
     let mut builder = Request::builder()
         .method(&method)
-        .uri(uri)
+        .uri(&uri)
         .header("User-Agent", "RustClient/1.0");
+
+    if inlcude_host_header {
+        builder = builder.header("HOST", uri.host().unwrap_or_default());
+    }
 
     if let Some(header_list) = headers {
         for (key, value) in header_list {
@@ -54,6 +61,7 @@ pub async fn request_batch<T: DeserializeOwned>(
     uris: &Vec<Uri>,
     method: Method,
     bodies: &Vec<Option<Value>>,
+    inlcude_host_header: bool,
 ) -> Result<Vec<(Option<T>, Option<anyhow::Error>)>, anyhow::Error> {
     let mut requests = Vec::new();
 
@@ -68,6 +76,10 @@ pub async fn request_batch<T: DeserializeOwned>(
             .uri(uri)
             .header("User-Agent", "RustClient/1.0")
             .header(hyper::header::HOST, uri.authority().unwrap().as_str());
+
+        if inlcude_host_header {
+            builder = builder.header("HOST", uri.host().unwrap_or_default());
+        }
 
         if method != Method::GET {
             builder = builder.header("Content-Type", "application/json")

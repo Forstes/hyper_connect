@@ -31,19 +31,11 @@ impl ConnectorEnum {
             #[cfg(feature = "http1")]
             ConnectorEnum::Http1(connector) => connector.create_connection(uri).await,
             #[cfg(feature = "http1_proxy")]
-            ConnectorEnum::Http1Proxy(connector) => {
-                connector
-                    .create_connection(uri, &connector.proxy_address, &connector.username, &connector.password)
-                    .await
-            }
+            ConnectorEnum::Http1Proxy(connector) => connector.create_connection(uri).await,
             #[cfg(feature = "http2")]
             ConnectorEnum::Http2(connector) => connector.create_connection(uri).await,
             #[cfg(feature = "http2_proxy")]
-            ConnectorEnum::Http2Proxy(connector) => {
-                connector
-                    .create_connection(uri, &connector.proxy_address, &connector.username, &connector.password)
-                    .await
-            }
+            ConnectorEnum::Http2Proxy(connector) => connector.create_connection(uri).await,
         }
     }
 }

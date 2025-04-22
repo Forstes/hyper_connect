@@ -26,7 +26,7 @@ impl Http2ProxyClient {
         method: Method,
         bodies: &Vec<Option<Value>>,
     ) -> Result<Vec<(Option<T>, Option<anyhow::Error>)>, anyhow::Error> {
-        json_http::request_batch(&mut self.handler, uris, method, bodies).await
+        json_http::request_batch(&mut self.handler, uris, method, bodies, false).await
     }
 
     pub async fn get<T: DeserializeOwned>(
@@ -36,7 +36,7 @@ impl Http2ProxyClient {
         headers: Option<Vec<(String, String)>>,
     ) -> Result<T, anyhow::Error> {
         let uri = json_http::build_uri_with_params(uri, params)?;
-        json_http::request(&mut self.handler, &uri, Method::GET, None, headers).await
+        json_http::request(&mut self.handler, &uri, Method::GET, None, headers, false).await
     }
 
     pub async fn post<T: DeserializeOwned>(
@@ -45,7 +45,7 @@ impl Http2ProxyClient {
         body: Option<Value>,
         headers: Option<Vec<(String, String)>>,
     ) -> Result<T, anyhow::Error> {
-        json_http::request(&mut self.handler, uri, Method::POST, body, headers).await
+        json_http::request(&mut self.handler, uri, Method::POST, body, headers, false).await
     }
 
     pub async fn put<T: DeserializeOwned>(
@@ -54,7 +54,7 @@ impl Http2ProxyClient {
         body: Option<Value>,
         headers: Option<Vec<(String, String)>>,
     ) -> Result<T, anyhow::Error> {
-        json_http::request(&mut self.handler, uri, Method::PUT, body, headers).await
+        json_http::request(&mut self.handler, uri, Method::PUT, body, headers, false).await
     }
 
     pub async fn delete<T: DeserializeOwned>(
@@ -62,6 +62,6 @@ impl Http2ProxyClient {
         uri: &str,
         headers: Option<Vec<(String, String)>>,
     ) -> Result<T, anyhow::Error> {
-        json_http::request(&mut self.handler, uri, Method::DELETE, None, headers).await
+        json_http::request(&mut self.handler, uri, Method::DELETE, None, headers, false).await
     }
 }
