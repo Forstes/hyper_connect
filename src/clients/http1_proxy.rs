@@ -36,7 +36,7 @@ impl Http1ProxyClient {
         headers: Option<Vec<(String, String)>>,
     ) -> Result<T, anyhow::Error> {
         let uri = json_http::build_uri_with_params(uri, params)?;
-        json_http::request(&mut self.handler, &uri, Method::GET, None, headers, true).await
+        json_http::request::<Value, T>(&mut self.handler, &uri, Method::GET, None, headers, true).await
     }
 
     pub async fn post<T: DeserializeOwned>(
@@ -62,6 +62,6 @@ impl Http1ProxyClient {
         uri: &str,
         headers: Option<Vec<(String, String)>>,
     ) -> Result<T, anyhow::Error> {
-        json_http::request(&mut self.handler, uri, Method::DELETE, None, headers, true).await
+        json_http::request::<Value, T>(&mut self.handler, uri, Method::DELETE, None, headers, true).await
     }
 }

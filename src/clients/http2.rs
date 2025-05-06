@@ -35,7 +35,7 @@ impl Http2Client {
         headers: Option<Vec<(String, String)>>,
     ) -> Result<T, anyhow::Error> {
         let uri = json_http::build_uri_with_params(uri, params)?;
-        json_http::request(&mut self.handler, &uri, Method::GET, None, headers, false).await
+        json_http::request::<Value, T>(&mut self.handler, &uri, Method::GET, None, headers, false).await
     }
 
     pub async fn post<T: DeserializeOwned>(
@@ -61,6 +61,6 @@ impl Http2Client {
         uri: &str,
         headers: Option<Vec<(String, String)>>,
     ) -> Result<T, anyhow::Error> {
-        json_http::request(&mut self.handler, &uri, Method::DELETE, None, headers, false).await
+        json_http::request::<Value, T>(&mut self.handler, &uri, Method::DELETE, None, headers, false).await
     }
 }

@@ -3,19 +3,19 @@ use bytes::Bytes;
 use http_body_util::{Either, Empty, Full};
 use hyper::{Method, Request, Uri};
 use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
-use serde::de::DeserializeOwned;
+use serde::{de::DeserializeOwned, Serialize};
 use serde_json::Value;
 
-pub async fn request<T: DeserializeOwned>(
+pub async fn request<S: Serialize, T: DeserializeOwned>(
     handler: &mut HttpHandler<Either<Full<Bytes>, Empty<Bytes>>>,
     uri: &str,
     method: Method,
-    body: Option<Value>,
+    body: Option<S>,
     headers: Option<Vec<(String, String)>>,
     inlcude_host_header: bool,
 ) -> Result<T, anyhow::Error> {
     let body_data: Either<Full<Bytes>, Empty<Bytes>> = match body {
-        Some(b) => Either::Left(Full::from(b.to_string())),
+        Some(b) => Either::Left(Full::from(serde_json::to_vec(&b)?)),
         None => Either::Right(Empty::<Bytes>::new()),
     };
 

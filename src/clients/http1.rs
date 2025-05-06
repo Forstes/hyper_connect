@@ -22,6 +22,6 @@ impl Http1Client {
 
     pub async fn get<T: DeserializeOwned>(&mut self, uri: &str, params: Option<Value>) -> Result<T, anyhow::Error> {
         let uri = json_http::build_uri_with_params(uri, params)?;
-        json_http::request(&mut self.handler, &uri, Method::GET, None, None, true).await
+        json_http::request::<Value, T>(&mut self.handler, &uri, Method::GET, None, None, true).await
     }
 }
