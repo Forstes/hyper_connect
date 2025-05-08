@@ -1,38 +1,29 @@
+use crate::{connection::HttpConnection, connectors::HttpConnector};
 use hyper::{body::Body, Uri};
-use std::{collections::HashMap, future::Future, sync::Arc, time::Duration};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 use tokio::sync::RwLock;
 
-pub struct ConnectionPool<B: Body + 'static, C: HttpConnection<B>, CN: HttpConnector> {
-    max_conns_per_host: usize,
-    pool: Arc<RwLock<HashMap<String, Vec<Arc<RwLock<C>>>>>>,
-    _pht1: std::marker::PhantomData<B>,
-    _pht2: std::marker::PhantomData<CN>,
-}
-
-pub trait HttpConnection<B: Body + 'static> {
-    fn send_request(
-        &mut self,
-        req: hyper::Request<B>,
-    ) -> impl Future<Output = Result<hyper::Response<hyper::body::Incoming>, hyper::Error>>;
-    fn is_conn_ready(&self) -> bool;
-    fn is_conn_closed(&self) -> bool;
-}
-
-pub trait HttpConnector {
-    fn create_connection<B, T: HttpConnection<B> + 'static>(&self, uri: &Uri) -> impl Future<Output = Result<T, anyhow::Error>>
-    where
-        B: Body + 'static + Unpin + Send,
-        B::Data: Send,
-        B::Error: Into<Box<dyn std::error::Error + Send + Sync>>;
-}
-
-impl<B, C, CN> ConnectionPool<B, C, CN>
+pub struct ConnectionPool<B, CN>
 where
     B: Body + 'static + Unpin + Send,
     B::Data: Send,
     B::Error: Into<Box<dyn std::error::Error + Send + Sync>>,
-    C: HttpConnection<B> + 'static,
     CN: HttpConnector,
+    CN::Connection<B>: HttpConnection<B>,
+{
+    max_conns_per_host: usize,
+    pool: Arc<RwLock<HashMap<String, Vec<Arc<RwLock<CN::Connection<B>>>>>>>,
+    _pht1: std::marker::PhantomData<B>,
+    _pht2: std::marker::PhantomData<CN>,
+}
+
+impl<B, CN> ConnectionPool<B, CN>
+where
+    B: Body + 'static + Unpin + Send,
+    B::Data: Send,
+    B::Error: Into<Box<dyn std::error::Error + Send + Sync>>,
+    CN: HttpConnector,
+    CN::Connection<B>: HttpConnection<B>,
 {
     pub fn new(max_conns_per_host: usize) -> Self {
         Self {
@@ -43,7 +34,7 @@ where
         }
     }
 
-    pub async fn get_conn(&self, uri: &Uri, connector: &CN) -> Result<Arc<RwLock<C>>, anyhow::Error> {
+    pub async fn get_conn(&self, uri: &Uri, connector: &CN) -> Result<Arc<RwLock<CN::Connection<B>>>, anyhow::Error> {
         let authority = uri.authority().unwrap().to_string();
 
         loop {

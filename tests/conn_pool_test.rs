@@ -1,7 +1,8 @@
 use bytes::Bytes;
 use http_body_util::Empty;
-use hyper::{Request, Response, Uri};
-use hyper_connect::handlers::conn_pool::{ConnectionPool, HttpConnection, HttpConnector};
+use hyper::{body::Body, Request, Response, Uri};
+use hyper_connect::{connection::HttpConnection, connectors::HttpConnector, handlers::conn_pool::ConnectionPool};
+use mockall::mock;
 use std::{
     str::FromStr,
     sync::{
@@ -10,15 +11,13 @@ use std::{
     },
 };
 
-use mockall::*;
-
 mock! {
-    pub HttpConn {}
+    pub HttpConn<B: Body + 'static> {}
 
-    impl HttpConnection<Empty<Bytes>> for HttpConn {
+    impl<B: Body + 'static> HttpConnection<B> for HttpConn<B> {
         fn is_conn_ready(&self) -> bool;
         fn is_conn_closed(&self) -> bool;
-        async fn send_request(&mut self, req: Request<Empty<Bytes>>) -> Result<Response<hyper::body::Incoming>, hyper::Error>;
+        async fn send_request(&mut self, req: Request<B>) -> Result<Response<hyper::body::Incoming>, hyper::Error>;
     }
 }
 
@@ -26,15 +25,21 @@ mock! {
     pub Connector {}
 
     impl HttpConnector for Connector {
-        async fn create_connection<B, T: HttpConnection<B>>(
+        type Connection<B> = MockHttpConn<B>
+        where
+        B: Body + Unpin + Send + 'static,
+        B::Data: Send,
+        B::Error: Into<Box<dyn std::error::Error + Send + Sync>>;
+
+        async fn create_connection<B>(
             &self,
             uri: &Uri,
-        ) -> Result<T, anyhow::Error>
+        ) -> Result<<MockConnector as HttpConnector>::Connection<B>, anyhow::Error>
         where
             B: hyper::body::Body + 'static + Unpin + Send,
             B::Data: Send,
-            B::Error: Into<Box<dyn std::error::Error + Send + Sync>>,
-            T: 'static;
+            B::Error: Into<Box<dyn std::error::Error + Send + Sync>>;
+
     }
 }
 
@@ -50,7 +55,7 @@ async fn test_connection_pool_uses_existing_ready_connection() {
 
     // Expect exactly 1 connection to be created
     mock_connector
-        .expect_create_connection::<Empty<Bytes>, MockHttpConn>()
+        .expect_create_connection::<Empty<Bytes>>()
         .returning(move |_uri| {
             let mut mock_conn = MockHttpConn::new();
 
@@ -61,7 +66,7 @@ async fn test_connection_pool_uses_existing_ready_connection() {
             Ok(mock_conn)
         });
 
-    let pool = ConnectionPool::<Empty<Bytes>, MockHttpConn, MockConnector>::new(2);
+    let pool = ConnectionPool::<Empty<Bytes>, MockConnector>::new(2);
 
     // First connection (will trigger connector)
     let conn1 = pool.get_conn(&uri, &mock_connector).await.unwrap();
@@ -88,7 +93,7 @@ async fn test_connection_pool_creates_new_connection() {
 
     // Expect exactly 2 connections to be created
     mock_connector
-        .expect_create_connection::<Empty<Bytes>, MockHttpConn>()
+        .expect_create_connection::<Empty<Bytes>>()
         .returning(move |_uri| {
             let mut mock_conn = MockHttpConn::new();
 
@@ -99,7 +104,7 @@ async fn test_connection_pool_creates_new_connection() {
             Ok(mock_conn)
         });
 
-    let pool = ConnectionPool::<Empty<Bytes>, MockHttpConn, MockConnector>::new(2);
+    let pool = ConnectionPool::<Empty<Bytes>, MockConnector>::new(2);
 
     // First connection (will trigger connector)
     let conn1 = pool.get_conn(&uri, &mock_connector).await.unwrap();
@@ -132,7 +137,7 @@ async fn test_connection_pool_waits_until_connection_released() {
 
     // Mock to return one connection and count creations
     mock_connector
-        .expect_create_connection::<Empty<Bytes>, MockHttpConn>()
+        .expect_create_connection::<Empty<Bytes>>()
         .returning(move |_uri| {
             let mut mock_conn = MockHttpConn::new();
             mock_conn.expect_is_conn_ready().return_const(true);
@@ -141,7 +146,7 @@ async fn test_connection_pool_waits_until_connection_released() {
             Ok(mock_conn)
         });
 
-    let pool = ConnectionPool::<Empty<Bytes>, MockHttpConn, MockConnector>::new(1);
+    let pool = ConnectionPool::<Empty<Bytes>, MockConnector>::new(1);
 
     // First connection: acquired and locked
     let conn1 = pool.get_conn(&uri, &mock_connector).await.unwrap();
@@ -184,7 +189,7 @@ async fn test_closed_connection_is_removed_from_pool() {
     // First call: return a closed connection
     let mut call_count = 0;
     mock_connector
-        .expect_create_connection::<Empty<Bytes>, MockHttpConn>()
+        .expect_create_connection::<Empty<Bytes>>()
         .returning(move |_uri| {
             let counter = if call_count == 0 { &counter_clone1 } else { &counter_clone2 };
             call_count += 1;
@@ -198,7 +203,7 @@ async fn test_closed_connection_is_removed_from_pool() {
         });
 
     // Pool with limit 1
-    let pool = ConnectionPool::<Empty<Bytes>, MockHttpConn, MockConnector>::new(1);
+    let pool = ConnectionPool::<Empty<Bytes>, MockConnector>::new(1);
 
     // First call inserts a closed connection (should trigger cleanup)
     let conn1 = pool.get_conn(&uri, &mock_connector).await.unwrap();

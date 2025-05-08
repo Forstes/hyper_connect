@@ -29,3 +29,4 @@ http2_proxy = []
 [dev-dependencies]
 hyper_connect = { path = ".", features = ["full"] }
 dotenvy = "0.15.7"
+mockall = "0.13.1"
