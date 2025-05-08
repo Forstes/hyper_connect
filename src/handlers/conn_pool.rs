@@ -11,10 +11,9 @@ where
     CN: HttpConnector,
     CN::Connection<B>: HttpConnection<B>,
 {
+    connector: CN,
     max_conns_per_host: usize,
     pool: Arc<RwLock<HashMap<String, Vec<Arc<RwLock<CN::Connection<B>>>>>>>,
-    _pht1: std::marker::PhantomData<B>,
-    _pht2: std::marker::PhantomData<CN>,
 }
 
 impl<B, CN> ConnectionPool<B, CN>
@@ -25,16 +24,15 @@ where
     CN: HttpConnector,
     CN::Connection<B>: HttpConnection<B>,
 {
-    pub fn new(max_conns_per_host: usize) -> Self {
+    pub fn new(connector: CN, max_conns_per_host: usize) -> Self {
         Self {
+            connector,
             max_conns_per_host,
             pool: Arc::new(RwLock::new(HashMap::new())),
-            _pht1: std::marker::PhantomData,
-            _pht2: std::marker::PhantomData,
         }
     }
 
-    pub async fn get_conn(&self, uri: &Uri, connector: &CN) -> Result<Arc<RwLock<CN::Connection<B>>>, anyhow::Error> {
+    pub async fn get_conn(&self, uri: &Uri) -> Result<Arc<RwLock<CN::Connection<B>>>, anyhow::Error> {
         let authority = uri.authority().unwrap().to_string();
 
         loop {
@@ -78,7 +76,7 @@ where
             }
 
             if can_create_new_conn {
-                let new_conn = Arc::new(RwLock::new(connector.create_connection(uri).await?));
+                let new_conn = Arc::new(RwLock::new(self.connector.create_connection(uri).await?));
                 let mut pool = self.pool.write().await;
                 let conns = pool.entry(authority.clone()).or_insert_with(Vec::new);
                 if conns.len() < self.max_conns_per_host {

@@ -14,9 +14,8 @@ pub struct Http2NewClient {
 
 impl Http2NewClient {
     pub fn new(max_conns_per_host: usize) -> Self {
-        let pool: ConnectionPool<Either<Full<Bytes>, Empty<Bytes>>, SimpleHttp2Connector> =
-            ConnectionPool::new(max_conns_per_host);
-        let handler = HttpHandler::new(SimpleHttp2Connector {}, pool);
+        let pool = ConnectionPool::new(SimpleHttp2Connector {}, max_conns_per_host);
+        let handler = HttpHandler::new(pool);
         Self { handler }
     }
 

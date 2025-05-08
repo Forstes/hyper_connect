@@ -15,7 +15,6 @@ where
     B::Error: Into<Box<dyn std::error::Error + Send + Sync>>,
     CN: HttpConnector,
 {
-    connector: CN,
     connection_pool: ConnectionPool<B, CN>,
 }
 
@@ -26,15 +25,12 @@ where
     B::Error: Into<Box<dyn std::error::Error + Send + Sync>>,
     CN: HttpConnector,
 {
-    pub fn new(connector: CN, connection_pool: ConnectionPool<B, CN>) -> Self {
-        Self {
-            connector,
-            connection_pool,
-        }
+    pub fn new(connection_pool: ConnectionPool<B, CN>) -> Self {
+        Self { connection_pool }
     }
 
     pub async fn request(&self, uri: &Uri, request: Request<B>) -> Result<(StatusCode, Bytes), anyhow::Error> {
-        let conn = self.connection_pool.get_conn(uri, &self.connector).await?;
+        let conn = self.connection_pool.get_conn(uri).await?;
 
         let mut conn = conn.write().await;
         let resp = conn.send_request(request).await?;
@@ -44,7 +40,7 @@ where
     }
 
     pub async fn request_many(&self, uri: &Uri, requests: Vec<Request<B>>) -> Result<Vec<(StatusCode, Bytes)>, anyhow::Error> {
-        let conn = self.connection_pool.get_conn(uri, &self.connector).await?;
+        let conn = self.connection_pool.get_conn(uri).await?;
 
         let mut join_set: JoinSet<Result<(StatusCode, Bytes), anyhow::Error>> = JoinSet::new();
 

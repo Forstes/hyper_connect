@@ -66,13 +66,13 @@ async fn test_connection_pool_uses_existing_ready_connection() {
             Ok(mock_conn)
         });
 
-    let pool = ConnectionPool::<Empty<Bytes>, MockConnector>::new(2);
+    let pool = ConnectionPool::<Empty<Bytes>, MockConnector>::new(mock_connector, 2);
 
     // First connection (will trigger connector)
-    let conn1 = pool.get_conn(&uri, &mock_connector).await.unwrap();
+    let conn1 = pool.get_conn(&uri).await.unwrap();
 
     // Second request (should reuse the first one)
-    let conn2 = pool.get_conn(&uri, &mock_connector).await.unwrap();
+    let conn2 = pool.get_conn(&uri).await.unwrap();
 
     // Should not have created a second connection
     assert_eq!(conn_counter.load(Ordering::SeqCst), 1);
@@ -104,16 +104,16 @@ async fn test_connection_pool_creates_new_connection() {
             Ok(mock_conn)
         });
 
-    let pool = ConnectionPool::<Empty<Bytes>, MockConnector>::new(2);
+    let pool = ConnectionPool::<Empty<Bytes>, MockConnector>::new(mock_connector, 2);
 
     // First connection (will trigger connector)
-    let conn1 = pool.get_conn(&uri, &mock_connector).await.unwrap();
+    let conn1 = pool.get_conn(&uri).await.unwrap();
 
     // Simulate first connection is in use
     let locked_conn = conn1.write().await;
 
     // Second request (should create new connection)
-    let conn2 = pool.get_conn(&uri, &mock_connector).await.unwrap();
+    let conn2 = pool.get_conn(&uri).await.unwrap();
 
     drop(locked_conn);
 
@@ -146,14 +146,14 @@ async fn test_connection_pool_waits_until_connection_released() {
             Ok(mock_conn)
         });
 
-    let pool = ConnectionPool::<Empty<Bytes>, MockConnector>::new(1);
+    let pool = ConnectionPool::<Empty<Bytes>, MockConnector>::new(mock_connector, 1);
 
     // First connection: acquired and locked
-    let conn1 = pool.get_conn(&uri, &mock_connector).await.unwrap();
+    let conn1 = pool.get_conn(&uri).await.unwrap();
     let conn1_lock = conn1.write().await;
 
     // Second connection: start waiting (it will block)
-    let get_conn2 = pool.get_conn(&uri, &mock_connector);
+    let get_conn2 = pool.get_conn(&uri);
     tokio::pin!(get_conn2);
 
     // Wait a short time to ensure it's waiting, not resolving
@@ -203,15 +203,15 @@ async fn test_closed_connection_is_removed_from_pool() {
         });
 
     // Pool with limit 1
-    let pool = ConnectionPool::<Empty<Bytes>, MockConnector>::new(1);
+    let pool = ConnectionPool::<Empty<Bytes>, MockConnector>::new(mock_connector, 1);
 
     // First call inserts a closed connection (should trigger cleanup)
-    let conn1 = pool.get_conn(&uri, &mock_connector).await.unwrap();
+    let conn1 = pool.get_conn(&uri).await.unwrap();
 
     assert_eq!(conn1.read().await.is_conn_closed(), true);
 
     // Request again and ensure no new connection is created
-    let conn2 = pool.get_conn(&uri, &mock_connector).await.unwrap();
+    let conn2 = pool.get_conn(&uri).await.unwrap();
     assert_eq!(conn_counter.load(Ordering::SeqCst), 2);
 
     // Ensure second connection is reused
