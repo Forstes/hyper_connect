@@ -11,13 +11,13 @@ impl HttpConnector for SimpleHttp2Connector {
     type Connection<B>
         = Http2Connection<B>
     where
-        B: Body + Unpin + Send + 'static,
+        B: Body + Unpin + Send + Sync + 'static,
         B::Data: Send,
         B::Error: Into<Box<dyn std::error::Error + Send + Sync>>;
 
     async fn create_connection<B>(&self, uri: &hyper::Uri) -> Result<Self::Connection<B>, anyhow::Error>
     where
-        B: Body + 'static + Unpin + Send,
+        B: Body + 'static + Unpin + Send + Sync,
         B::Data: Send,
         B::Error: Into<Box<dyn std::error::Error + Send + Sync>>,
     {

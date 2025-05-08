@@ -14,7 +14,7 @@ use std::{
 mock! {
     pub HttpConn<B: Body + 'static> {}
 
-    impl<B: Body + 'static> HttpConnection<B> for HttpConn<B> {
+    impl<B: Body + Send + 'static> HttpConnection<B> for HttpConn<B> {
         fn is_conn_ready(&self) -> bool;
         fn is_conn_closed(&self) -> bool;
         async fn send_request(&mut self, req: Request<B>) -> Result<Response<hyper::body::Incoming>, hyper::Error>;
@@ -27,7 +27,7 @@ mock! {
     impl HttpConnector for Connector {
         type Connection<B> = MockHttpConn<B>
         where
-        B: Body + Unpin + Send + 'static,
+        B: Body + Unpin + Send + Sync + 'static,
         B::Data: Send,
         B::Error: Into<Box<dyn std::error::Error + Send + Sync>>;
 
@@ -36,7 +36,7 @@ mock! {
             uri: &Uri,
         ) -> Result<<MockConnector as HttpConnector>::Connection<B>, anyhow::Error>
         where
-            B: hyper::body::Body + 'static + Unpin + Send,
+            B: hyper::body::Body + 'static + Unpin + Send + Sync,
             B::Data: Send,
             B::Error: Into<Box<dyn std::error::Error + Send + Sync>>;
 

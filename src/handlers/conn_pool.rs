@@ -5,7 +5,7 @@ use tokio::sync::RwLock;
 
 pub struct ConnectionPool<B, CN>
 where
-    B: Body + 'static + Unpin + Send,
+    B: Body + 'static + Unpin + Send + Sync,
     B::Data: Send,
     B::Error: Into<Box<dyn std::error::Error + Send + Sync>>,
     CN: HttpConnector,
@@ -19,7 +19,7 @@ where
 
 impl<B, CN> ConnectionPool<B, CN>
 where
-    B: Body + 'static + Unpin + Send,
+    B: Body + 'static + Unpin + Send + Sync,
     B::Data: Send,
     B::Error: Into<Box<dyn std::error::Error + Send + Sync>>,
     CN: HttpConnector,

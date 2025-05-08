@@ -15,15 +15,15 @@ pub mod http2_new;
 pub mod http2_proxy;
 
 pub trait HttpConnector {
-    type Connection<B>: HttpConnection<B>
+    type Connection<B>: HttpConnection<B> + Send + Sync + 'static
     where
-        B: Body + Unpin + Send + 'static,
+        B: Body + Unpin + Send + Sync + 'static,
         B::Data: Send,
         B::Error: Into<Box<dyn std::error::Error + Send + Sync>>;
 
     fn create_connection<B>(&self, uri: &hyper::Uri) -> impl Future<Output = Result<Self::Connection<B>, anyhow::Error>>
     where
-        B: Body + 'static + Unpin + Send,
+        B: Body + 'static + Unpin + Send + Sync,
         B::Data: Send,
         B::Error: Into<Box<dyn std::error::Error + Send + Sync>>;
 }
