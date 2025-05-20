@@ -24,8 +24,9 @@ impl Http2NewClient {
             handler: &self.handler,
             uri,
             method: Method::GET,
-            headers: Vec::new(),
+            query: String::new(),
             body: None,
+            headers: Vec::new(),
         }
     }
 
@@ -34,8 +35,9 @@ impl Http2NewClient {
             handler: &self.handler,
             uri,
             method: Method::POST,
-            headers: Vec::new(),
+            query: String::new(),
             body: None,
+            headers: Vec::new(),
         }
     }
 }
@@ -44,13 +46,19 @@ pub struct Request<'a> {
     handler: &'a HttpHandler<Either<Full<Bytes>, Empty<Bytes>>, SimpleHttp2Connector>,
     uri: &'a str,
     method: Method,
-    headers: Vec<(&'a str, &'a str)>,
+    query: String,
     body: Option<Vec<u8>>,
+    headers: Vec<(&'a str, &'a str)>,
 }
 
 impl<'a> Request<'a> {
-    pub fn json<S: Serialize>(mut self, v: S) -> Result<Self, serde_json::Error> {
-        self.body = Some(serde_json::to_vec(&v)?);
+    pub fn query<S: Serialize>(mut self, v: &S) -> Result<Self, serde_urlencoded::ser::Error> {
+        self.query = serde_urlencoded::to_string(v)?;
+        Ok(self)
+    }
+
+    pub fn json<S: Serialize>(mut self, v: &S) -> Result<Self, serde_json::Error> {
+        self.body = Some(serde_json::to_vec(v)?);
         self.headers.push(("Content-Type", "application/json"));
         Ok(self)
     }
@@ -66,7 +74,7 @@ impl<'a> Request<'a> {
             None => Either::Right(Empty::<Bytes>::new()),
         };
 
-        let uri = Uri::try_from(self.uri)?;
+        let uri = Uri::try_from(format!("{}?{}", self.uri, self.query))?;
 
         let mut builder = hyper::Request::builder()
             .method(&self.method)
