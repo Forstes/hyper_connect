@@ -48,7 +48,7 @@ pub struct Request<'a> {
     method: Method,
     query: String,
     body: Option<Vec<u8>>,
-    headers: Vec<(&'a str, &'a str)>,
+    headers: Vec<(&'a str, String)>,
 }
 
 impl<'a> Request<'a> {
@@ -59,11 +59,11 @@ impl<'a> Request<'a> {
 
     pub fn json<S: Serialize>(mut self, v: &S) -> Result<Self, serde_json::Error> {
         self.body = Some(serde_json::to_vec(v)?);
-        self.headers.push(("Content-Type", "application/json"));
+        self.headers.push(("Content-Type", "application/json".to_string()));
         Ok(self)
     }
 
-    pub fn headers(mut self, mut headers: Vec<(&'a str, &'a str)>) -> Self {
+    pub fn headers(mut self, mut headers: Vec<(&'a str, String)>) -> Self {
         self.headers.append(&mut headers);
         self
     }
