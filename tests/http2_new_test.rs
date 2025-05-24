@@ -7,7 +7,7 @@ async fn test_get() {
 
     let resp = client
         .get("https://api1.binance.com/api/v3/time")
-        .headers(vec![("Yo", "HoHO")])
+        .headers(vec![("Yo", "HoHO".to_string())])
         .send()
         .await
         .unwrap()

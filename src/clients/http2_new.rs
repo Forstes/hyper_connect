@@ -74,7 +74,15 @@ impl<'a> Request<'a> {
             None => Either::Right(Empty::<Bytes>::new()),
         };
 
-        let uri = Uri::try_from(format!("{}?{}", self.uri, self.query))?;
+        let uri = if self.query.is_empty() {
+            Uri::try_from(self.uri)?
+        } else {
+            let mut uri_buf = String::with_capacity(self.uri.len() + 1 + self.query.len());
+            uri_buf.push_str(self.uri);
+            uri_buf.push('?');
+            uri_buf.push_str(&self.query);
+            Uri::try_from(uri_buf)?
+        };
 
         let mut builder = hyper::Request::builder()
             .method(&self.method)
