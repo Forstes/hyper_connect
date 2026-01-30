@@ -1,66 +1,47 @@
-use super::json_http;
+pub use crate::clients::traits::HttpClient;
 use crate::{
-    connectors::{enums::connector::ConnectorEnum, http2::SimpleHttp2Connector},
-    handlers::http::HttpHandler,
+    clients::traits::Request,
+    connectors::http2::SimpleHttp2Connector,
+    handlers::{conn_pool::ConnectionPool, http::HttpHandler},
 };
 use bytes::Bytes;
 use http_body_util::{Either, Empty, Full};
-use hyper::{Method, Uri};
-use serde::de::DeserializeOwned;
-use serde_json::Value;
+use hyper::Method;
+
 pub struct Http2Client {
-    handler: HttpHandler<Either<Full<Bytes>, Empty<Bytes>>>,
+    handler: HttpHandler<Either<Full<Bytes>, Empty<Bytes>>, SimpleHttp2Connector>,
 }
 
 impl Http2Client {
-    pub fn new() -> Self {
-        let connector = SimpleHttp2Connector {};
-        let handler = HttpHandler::new(ConnectorEnum::Http2(connector));
+    pub fn new(max_conns_per_host: usize) -> Self {
+        let pool = ConnectionPool::new(SimpleHttp2Connector {}, max_conns_per_host);
+        let handler = HttpHandler::new(pool);
         Self { handler }
     }
+}
 
-    pub async fn request_many<T: DeserializeOwned>(
-        &mut self,
-        uris: &Vec<Uri>,
-        method: Method,
-        bodies: &Vec<Option<Value>>,
-    ) -> Result<Vec<(Option<T>, Option<anyhow::Error>)>, anyhow::Error> {
-        json_http::request_batch(&mut self.handler, uris, method, bodies, false).await
+impl HttpClient<SimpleHttp2Connector> for Http2Client {
+    fn get<'a>(&'a self, uri: &'a str) -> Request<'a, SimpleHttp2Connector> {
+        Request {
+            handler: &self.handler,
+            uri,
+            method: Method::GET,
+            query: String::new(),
+            body: None,
+            headers: Vec::new(),
+            include_host_header: true,
+        }
     }
 
-    pub async fn get<T: DeserializeOwned>(
-        &mut self,
-        uri: &str,
-        params: Option<Value>,
-        headers: Option<Vec<(String, String)>>,
-    ) -> Result<T, anyhow::Error> {
-        let uri = json_http::build_uri_with_params(uri, params)?;
-        json_http::request::<Value, T>(&mut self.handler, &uri, Method::GET, None, headers, false).await
-    }
-
-    pub async fn post<T: DeserializeOwned>(
-        &mut self,
-        uri: &str,
-        body: Option<Value>,
-        headers: Option<Vec<(String, String)>>,
-    ) -> Result<T, anyhow::Error> {
-        json_http::request(&mut self.handler, uri, Method::POST, body, headers, false).await
-    }
-
-    pub async fn put<T: DeserializeOwned>(
-        &mut self,
-        uri: &str,
-        body: Option<Value>,
-        headers: Option<Vec<(String, String)>>,
-    ) -> Result<T, anyhow::Error> {
-        json_http::request(&mut self.handler, uri, Method::PUT, body, headers, false).await
-    }
-
-    pub async fn delete<T: DeserializeOwned>(
-        &mut self,
-        uri: &str,
-        headers: Option<Vec<(String, String)>>,
-    ) -> Result<T, anyhow::Error> {
-        json_http::request::<Value, T>(&mut self.handler, &uri, Method::DELETE, None, headers, false).await
+    fn post<'a>(&'a self, uri: &'a str) -> Request<'a, SimpleHttp2Connector> {
+        Request {
+            handler: &self.handler,
+            uri,
+            method: Method::POST,
+            query: String::new(),
+            body: None,
+            headers: Vec::new(),
+            include_host_header: true,
+        }
     }
 }

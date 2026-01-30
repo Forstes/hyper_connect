@@ -1,57 +1,29 @@
-use crate::{
-    connectors::http2_new::SimpleHttp2Connector,
-    handlers::{conn_pool::ConnectionPool, http_new::HttpHandler},
-};
+use crate::{connectors::HttpConnector, handlers::http::HttpHandler};
 use bytes::Bytes;
 use http_body_util::{Either, Empty, Full};
 use hyper::{Method, Uri};
 use serde::{de::DeserializeOwned, Serialize};
 use serde_json::de::SliceRead;
 
-pub struct Http2NewClient {
-    handler: HttpHandler<Either<Full<Bytes>, Empty<Bytes>>, SimpleHttp2Connector>,
+pub trait HttpClient<CN: HttpConnector> {
+    fn get<'a>(&'a self, uri: &'a str) -> Request<'a, CN>;
+    fn post<'a>(&'a self, uri: &'a str) -> Request<'a, CN>;
 }
 
-impl Http2NewClient {
-    pub fn new(max_conns_per_host: usize) -> Self {
-        let pool = ConnectionPool::new(SimpleHttp2Connector {}, max_conns_per_host);
-        let handler = HttpHandler::new(pool);
-        Self { handler }
-    }
-
-    pub fn get<'a>(&'a self, uri: &'a str) -> Request<'a> {
-        Request {
-            handler: &self.handler,
-            uri,
-            method: Method::GET,
-            query: String::new(),
-            body: None,
-            headers: Vec::new(),
-        }
-    }
-
-    pub fn post<'a>(&'a self, uri: &'a str) -> Request<'a> {
-        Request {
-            handler: &self.handler,
-            uri,
-            method: Method::POST,
-            query: String::new(),
-            body: None,
-            headers: Vec::new(),
-        }
-    }
+pub struct Request<'a, CN: HttpConnector> {
+    pub(crate) handler: &'a HttpHandler<Either<Full<Bytes>, Empty<Bytes>>, CN>,
+    pub(crate) uri: &'a str,
+    pub(crate) method: Method,
+    pub(crate) query: String,
+    pub(crate) body: Option<Vec<u8>>,
+    pub(crate) headers: Vec<(&'a str, String)>,
+    pub(crate) include_host_header: bool,
 }
 
-pub struct Request<'a> {
-    handler: &'a HttpHandler<Either<Full<Bytes>, Empty<Bytes>>, SimpleHttp2Connector>,
-    uri: &'a str,
-    method: Method,
-    query: String,
-    body: Option<Vec<u8>>,
-    headers: Vec<(&'a str, String)>,
-}
-
-impl<'a> Request<'a> {
+impl<'a, CN> Request<'a, CN>
+where
+    CN: HttpConnector,
+{
     pub fn query<S: Serialize>(mut self, v: &S) -> Result<Self, serde_urlencoded::ser::Error> {
         self.query = serde_urlencoded::to_string(v)?;
         Ok(self)
@@ -88,6 +60,10 @@ impl<'a> Request<'a> {
             .method(&self.method)
             .uri(&uri)
             .header("User-Agent", "RustClient/1.0");
+
+        if self.include_host_header {
+            builder = builder.header("HOST", uri.host().unwrap_or_default());
+        }
 
         for (key, value) in self.headers {
             builder = builder.header(key, value);

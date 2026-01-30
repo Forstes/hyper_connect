@@ -1,4 +1,4 @@
-use hyper_connect::clients::http1_proxy::Http1ProxyClient;
+use hyper_connect::clients::http1_proxy::*;
 use serde_json::Value;
 use std::env;
 
@@ -10,12 +10,15 @@ async fn test_request() {
     let proxy_username = env::var("PROXY_USERNAME").expect("PROXY_USERNAME must be set");
     let proxy_password = env::var("PROXY_PASSWORD").expect("PROXY_PASSWORD must be set");
 
-    let mut client = Http1ProxyClient::new(proxy_address, proxy_username, proxy_password);
+    let client = Http1ProxyClient::new(proxy_address, proxy_username, proxy_password, 1);
 
     let resp = client
-        .get::<Value>("https://www.randomnumberapi.com/api/v1.0/random", None, None)
+        .get("https://www.randomnumberapi.com/api/v1.0/random")
+        .send()
         .await
-        .expect("Request failed");
+        .unwrap()
+        .to_json::<Value>()
+        .unwrap();
 
     println!("{}", resp);
 }

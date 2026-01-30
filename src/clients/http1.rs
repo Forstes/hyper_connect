@@ -1,27 +1,47 @@
-use super::json_http;
+pub use crate::clients::traits::HttpClient;
 use crate::{
-    connectors::{enums::connector::ConnectorEnum, http1::SimpleHttp1Connector},
-    handlers::http::HttpHandler,
+    clients::traits::Request,
+    connectors::http1::SimpleHttp1Connector,
+    handlers::{conn_pool::ConnectionPool, http::HttpHandler},
 };
 use bytes::Bytes;
 use http_body_util::{Either, Empty, Full};
 use hyper::Method;
-use serde::de::DeserializeOwned;
-use serde_json::Value;
 
 pub struct Http1Client {
-    handler: HttpHandler<Either<Full<Bytes>, Empty<Bytes>>>,
+    handler: HttpHandler<Either<Full<Bytes>, Empty<Bytes>>, SimpleHttp1Connector>,
 }
 
 impl Http1Client {
-    pub fn new() -> Self {
-        let connector = SimpleHttp1Connector {};
-        let handler = HttpHandler::new(ConnectorEnum::Http1(connector));
+    pub fn new(max_conns_per_host: usize) -> Self {
+        let pool = ConnectionPool::new(SimpleHttp1Connector {}, max_conns_per_host);
+        let handler = HttpHandler::new(pool);
         Self { handler }
     }
+}
 
-    pub async fn get<T: DeserializeOwned>(&mut self, uri: &str, params: Option<Value>) -> Result<T, anyhow::Error> {
-        let uri = json_http::build_uri_with_params(uri, params)?;
-        json_http::request::<Value, T>(&mut self.handler, &uri, Method::GET, None, None, true).await
+impl HttpClient<SimpleHttp1Connector> for Http1Client {
+    fn get<'a>(&'a self, uri: &'a str) -> Request<'a, SimpleHttp1Connector> {
+        Request {
+            handler: &self.handler,
+            uri,
+            method: Method::GET,
+            query: String::new(),
+            body: None,
+            headers: Vec::new(),
+            include_host_header: true,
+        }
+    }
+
+    fn post<'a>(&'a self, uri: &'a str) -> Request<'a, SimpleHttp1Connector> {
+        Request {
+            handler: &self.handler,
+            uri,
+            method: Method::POST,
+            query: String::new(),
+            body: None,
+            headers: Vec::new(),
+            include_host_header: true,
+        }
     }
 }

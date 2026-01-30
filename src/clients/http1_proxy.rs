@@ -1,67 +1,47 @@
-use super::json_http;
+pub use crate::clients::traits::HttpClient;
 use crate::{
-    connectors::{enums::connector::ConnectorEnum, http1_proxy::ProxyHttp1Connector},
-    handlers::http::HttpHandler,
+    clients::traits::Request,
+    connectors::http1_proxy::ProxyHttp1Connector,
+    handlers::{conn_pool::ConnectionPool, http::HttpHandler},
 };
 use bytes::Bytes;
 use http_body_util::{Either, Empty, Full};
-use hyper::{Method, Uri};
-use serde::de::DeserializeOwned;
-use serde_json::Value;
+use hyper::Method;
 
 pub struct Http1ProxyClient {
-    handler: HttpHandler<Either<Full<Bytes>, Empty<Bytes>>>,
+    handler: HttpHandler<Either<Full<Bytes>, Empty<Bytes>>, ProxyHttp1Connector>,
 }
 
 impl Http1ProxyClient {
-    pub fn new(proxy_address: String, username: String, password: String) -> Self {
-        let connector = ProxyHttp1Connector::new(proxy_address, username, password);
-        let handler = HttpHandler::new(ConnectorEnum::Http1Proxy(connector));
+    pub fn new(proxy_address: String, username: String, password: String, max_conns_per_host: usize) -> Self {
+        let pool = ConnectionPool::new(ProxyHttp1Connector::new(proxy_address, username, password), max_conns_per_host);
+        let handler = HttpHandler::new(pool);
         Self { handler }
     }
+}
 
-    pub async fn request_many<T: DeserializeOwned>(
-        &mut self,
-        uris: &Vec<Uri>,
-        method: Method,
-        bodies: &Vec<Option<Value>>,
-    ) -> Result<Vec<(Option<T>, Option<anyhow::Error>)>, anyhow::Error> {
-        json_http::request_batch(&mut self.handler, uris, method, bodies, true).await
+impl HttpClient<ProxyHttp1Connector> for Http1ProxyClient {
+    fn get<'a>(&'a self, uri: &'a str) -> Request<'a, ProxyHttp1Connector> {
+        Request {
+            handler: &self.handler,
+            uri,
+            method: Method::GET,
+            query: String::new(),
+            body: None,
+            headers: Vec::new(),
+            include_host_header: true,
+        }
     }
 
-    pub async fn get<T: DeserializeOwned>(
-        &mut self,
-        uri: &str,
-        params: Option<Value>,
-        headers: Option<Vec<(String, String)>>,
-    ) -> Result<T, anyhow::Error> {
-        let uri = json_http::build_uri_with_params(uri, params)?;
-        json_http::request::<Value, T>(&mut self.handler, &uri, Method::GET, None, headers, true).await
-    }
-
-    pub async fn post<T: DeserializeOwned>(
-        &mut self,
-        uri: &str,
-        body: Option<Value>,
-        headers: Option<Vec<(String, String)>>,
-    ) -> Result<T, anyhow::Error> {
-        json_http::request(&mut self.handler, uri, Method::POST, body, headers, true).await
-    }
-
-    pub async fn put<T: DeserializeOwned>(
-        &mut self,
-        uri: &str,
-        body: Option<Value>,
-        headers: Option<Vec<(String, String)>>,
-    ) -> Result<T, anyhow::Error> {
-        json_http::request(&mut self.handler, uri, Method::PUT, body, headers, true).await
-    }
-
-    pub async fn delete<T: DeserializeOwned>(
-        &mut self,
-        uri: &str,
-        headers: Option<Vec<(String, String)>>,
-    ) -> Result<T, anyhow::Error> {
-        json_http::request::<Value, T>(&mut self.handler, uri, Method::DELETE, None, headers, true).await
+    fn post<'a>(&'a self, uri: &'a str) -> Request<'a, ProxyHttp1Connector> {
+        Request {
+            handler: &self.handler,
+            uri,
+            method: Method::POST,
+            query: String::new(),
+            body: None,
+            headers: Vec::new(),
+            include_host_header: true,
+        }
     }
 }

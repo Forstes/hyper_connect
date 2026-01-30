@@ -1,6 +1,9 @@
-use super::enums::send_request::SendRequestEnum;
-use crate::utils::{proxy_tunnel::create_proxy_tunnel, tls::create_tls_connector};
-use hyper::{body::Body, client::conn::http2, Uri};
+use crate::{
+    connection::Http2Connection,
+    connectors::HttpConnector,
+    utils::{proxy_tunnel::create_proxy_tunnel, tls::create_tls_connector},
+};
+use hyper::{body::Body, client::conn::http2};
 use hyper_util::rt::TokioIo;
 use std::time::Duration;
 use tokio::time::timeout;
@@ -19,10 +22,19 @@ impl ProxyHttp2Connector {
             password,
         }
     }
+}
 
-    pub async fn create_connection<B>(&self, target_uri: &Uri) -> Result<SendRequestEnum<B>, anyhow::Error>
+impl HttpConnector for ProxyHttp2Connector {
+    type Connection<B>
+        = Http2Connection<B>
     where
-        B: Body + 'static + Unpin + Send,
+        B: Body + Unpin + Send + Sync + 'static,
+        B::Data: Send,
+        B::Error: Into<Box<dyn std::error::Error + Send + Sync>>;
+
+    async fn create_connection<B>(&self, target_uri: &hyper::Uri) -> Result<Self::Connection<B>, anyhow::Error>
+    where
+        B: Body + 'static + Unpin + Send + Sync,
         B::Data: Send,
         B::Error: Into<Box<dyn std::error::Error + Send + Sync>>,
     {
@@ -40,6 +52,6 @@ impl ProxyHttp2Connector {
             }
         });
 
-        Ok(SendRequestEnum::Http2(sender))
+        Ok(Http2Connection { conn: sender })
     }
 }

@@ -1,16 +1,22 @@
-use super::enums::send_request::SendRequestEnum;
-use crate::utils::tls::create_tls_connector;
-use hyper::{body::Body, client::conn::http1, Uri};
+use crate::{connection::Http1Connection, connectors::HttpConnector, utils::tls::create_tls_connector};
+use hyper::{body::Body, client::conn::http1};
 use hyper_util::rt::TokioIo;
 use std::time::Duration;
 use tokio::{net::TcpStream, time::timeout};
 
 pub struct SimpleHttp1Connector {}
 
-impl SimpleHttp1Connector {
-    pub async fn create_connection<B>(&self, uri: &Uri) -> Result<SendRequestEnum<B>, anyhow::Error>
+impl HttpConnector for SimpleHttp1Connector {
+    type Connection<B>
+        = Http1Connection<B>
     where
-        B: Body + 'static + Unpin + Send,
+        B: Body + Unpin + Send + Sync + 'static,
+        B::Data: Send,
+        B::Error: Into<Box<dyn std::error::Error + Send + Sync>>;
+
+    async fn create_connection<B>(&self, uri: &hyper::Uri) -> Result<Self::Connection<B>, anyhow::Error>
+    where
+        B: Body + 'static + Unpin + Send + Sync,
         B::Data: Send,
         B::Error: Into<Box<dyn std::error::Error + Send + Sync>>,
     {
@@ -35,6 +41,6 @@ impl SimpleHttp1Connector {
             }
         });
 
-        Ok(SendRequestEnum::Http1(sender))
+        Ok(Http1Connection { conn: sender })
     }
 }
