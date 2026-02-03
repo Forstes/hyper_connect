@@ -5,9 +5,11 @@ use hyper::{Method, Uri};
 use serde::{de::DeserializeOwned, Serialize};
 use serde_json::de::SliceRead;
 
-pub trait HttpClient<CN: HttpConnector> {
-    fn get<'a>(&'a self, uri: &'a str) -> Request<'a, CN>;
-    fn post<'a>(&'a self, uri: &'a str) -> Request<'a, CN>;
+pub trait HttpClient {
+    type Connector: HttpConnector;
+
+    fn get<'a>(&'a self, uri: &'a str) -> Request<'a, Self::Connector>;
+    fn post<'a>(&'a self, uri: &'a str) -> Request<'a, Self::Connector>;
 }
 
 pub struct Request<'a, CN: HttpConnector> {

@@ -20,8 +20,10 @@ impl Http1ProxyClient {
     }
 }
 
-impl HttpClient<ProxyHttp1Connector> for Http1ProxyClient {
-    fn get<'a>(&'a self, uri: &'a str) -> Request<'a, ProxyHttp1Connector> {
+impl HttpClient for Http1ProxyClient {
+    type Connector = ProxyHttp1Connector;
+
+    fn get<'a>(&'a self, uri: &'a str) -> Request<'a, Self::Connector> {
         Request {
             handler: &self.handler,
             uri,
@@ -33,7 +35,7 @@ impl HttpClient<ProxyHttp1Connector> for Http1ProxyClient {
         }
     }
 
-    fn post<'a>(&'a self, uri: &'a str) -> Request<'a, ProxyHttp1Connector> {
+    fn post<'a>(&'a self, uri: &'a str) -> Request<'a, Self::Connector> {
         Request {
             handler: &self.handler,
             uri,

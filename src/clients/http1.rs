@@ -20,8 +20,10 @@ impl Http1Client {
     }
 }
 
-impl HttpClient<SimpleHttp1Connector> for Http1Client {
-    fn get<'a>(&'a self, uri: &'a str) -> Request<'a, SimpleHttp1Connector> {
+impl HttpClient for Http1Client {
+    type Connector = SimpleHttp1Connector;
+
+    fn get<'a>(&'a self, uri: &'a str) -> Request<'a, Self::Connector> {
         Request {
             handler: &self.handler,
             uri,
@@ -33,7 +35,7 @@ impl HttpClient<SimpleHttp1Connector> for Http1Client {
         }
     }
 
-    fn post<'a>(&'a self, uri: &'a str) -> Request<'a, SimpleHttp1Connector> {
+    fn post<'a>(&'a self, uri: &'a str) -> Request<'a, Self::Connector> {
         Request {
             handler: &self.handler,
             uri,

@@ -20,8 +20,10 @@ impl Http2Client {
     }
 }
 
-impl HttpClient<SimpleHttp2Connector> for Http2Client {
-    fn get<'a>(&'a self, uri: &'a str) -> Request<'a, SimpleHttp2Connector> {
+impl HttpClient for Http2Client {
+    type Connector = SimpleHttp2Connector;
+
+    fn get<'a>(&'a self, uri: &'a str) -> Request<'a, Self::Connector> {
         Request {
             handler: &self.handler,
             uri,
@@ -33,7 +35,7 @@ impl HttpClient<SimpleHttp2Connector> for Http2Client {
         }
     }
 
-    fn post<'a>(&'a self, uri: &'a str) -> Request<'a, SimpleHttp2Connector> {
+    fn post<'a>(&'a self, uri: &'a str) -> Request<'a, Self::Connector> {
         Request {
             handler: &self.handler,
             uri,

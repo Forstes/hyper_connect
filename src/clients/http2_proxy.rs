@@ -20,8 +20,10 @@ impl Http2ProxyClient {
     }
 }
 
-impl HttpClient<ProxyHttp2Connector> for Http2ProxyClient {
-    fn get<'a>(&'a self, uri: &'a str) -> Request<'a, ProxyHttp2Connector> {
+impl HttpClient for Http2ProxyClient {
+    type Connector = ProxyHttp2Connector;
+
+    fn get<'a>(&'a self, uri: &'a str) -> Request<'a, Self::Connector> {
         Request {
             handler: &self.handler,
             uri,
@@ -33,7 +35,7 @@ impl HttpClient<ProxyHttp2Connector> for Http2ProxyClient {
         }
     }
 
-    fn post<'a>(&'a self, uri: &'a str) -> Request<'a, ProxyHttp2Connector> {
+    fn post<'a>(&'a self, uri: &'a str) -> Request<'a, Self::Connector> {
         Request {
             handler: &self.handler,
             uri,
