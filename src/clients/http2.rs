@@ -31,7 +31,7 @@ impl HttpClient for Http2Client {
             query: String::new(),
             body: None,
             headers: Vec::new(),
-            include_host_header: true,
+            include_host_header: false,
         }
     }
 
@@ -43,7 +43,7 @@ impl HttpClient for Http2Client {
             query: String::new(),
             body: None,
             headers: Vec::new(),
-            include_host_header: true,
+            include_host_header: false,
         }
     }
 }
