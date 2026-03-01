@@ -14,7 +14,7 @@ impl<CN: Http1Connector> Http1Handler<CN> {
     }
 }
 
-impl<CN: Http1Connector> HttpHandler for Http1Handler<CN> {
+impl<CN: Http1Connector + Send + Sync> HttpHandler for Http1Handler<CN> {
     async fn request(&self, uri: &Uri, request: Request<Either<Full<Bytes>, Empty<Bytes>>>) -> Result<(StatusCode, Bytes), anyhow::Error> {
         let mut conn = self.conn_pool.get_conn(uri).await?;
 

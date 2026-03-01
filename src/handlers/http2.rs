@@ -14,7 +14,7 @@ impl<CN: Http2Connector> Http2Handler<CN> {
     }
 }
 
-impl<CN: Http2Connector> HttpHandler for Http2Handler<CN> {
+impl<CN: Http2Connector + Send + Sync> HttpHandler for Http2Handler<CN> {
     async fn request(&self, uri: &Uri, request: Request<Either<Full<Bytes>, Empty<Bytes>>>) -> Result<(StatusCode, Bytes), anyhow::Error> {
         let mut conn = self.conn_pool.get_conn(uri).await?;
 
