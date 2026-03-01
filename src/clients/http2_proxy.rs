@@ -2,28 +2,26 @@ pub use crate::clients::traits::HttpClient;
 use crate::{
     clients::traits::Request,
     connectors::http2_proxy::ProxyHttp2Connector,
-    handlers::{conn_pool::ConnectionPool, http::HttpHandler},
+    handlers::{http2::Http2Handler, http2_conn_pool::Http2ConnPool},
 };
-use bytes::Bytes;
-use http_body_util::{Either, Empty, Full};
 use hyper::Method;
 
 pub struct Http2ProxyClient {
-    handler: HttpHandler<Either<Full<Bytes>, Empty<Bytes>>, ProxyHttp2Connector>,
+    handler: Http2Handler<ProxyHttp2Connector>,
 }
 
 impl Http2ProxyClient {
-    pub fn new(proxy_address: String, username: String, password: String, max_conns_per_host: usize) -> Self {
-        let pool = ConnectionPool::new(ProxyHttp2Connector::new(proxy_address, username, password), max_conns_per_host);
-        let handler = HttpHandler::new(pool);
+    pub fn new(proxy_address: String, username: String, password: String) -> Self {
+        let pool = Http2ConnPool::new(ProxyHttp2Connector::new(proxy_address, username, password));
+        let handler = Http2Handler::new(pool);
         Self { handler }
     }
 }
 
 impl HttpClient for Http2ProxyClient {
-    type Connector = ProxyHttp2Connector;
+    type Handler = Http2Handler<ProxyHttp2Connector>;
 
-    fn get<'a>(&'a self, uri: &'a str) -> Request<'a, Self::Connector> {
+    fn get<'a>(&'a self, uri: &'a str) -> Request<'a, Self::Handler> {
         Request {
             handler: &self.handler,
             uri,
@@ -35,7 +33,7 @@ impl HttpClient for Http2ProxyClient {
         }
     }
 
-    fn post<'a>(&'a self, uri: &'a str) -> Request<'a, Self::Connector> {
+    fn post<'a>(&'a self, uri: &'a str) -> Request<'a, Self::Handler> {
         Request {
             handler: &self.handler,
             uri,

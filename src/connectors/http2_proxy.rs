@@ -1,9 +1,8 @@
 use crate::{
-    connection::Http2Connection,
-    connectors::HttpConnector,
+    connectors::types::{Http2Connection, Http2Connector},
     utils::{proxy_tunnel::create_proxy_tunnel, tls::create_tls_connector},
 };
-use hyper::{body::Body, client::conn::http2};
+use hyper::client::conn::http2;
 use hyper_util::rt::TokioIo;
 use std::time::Duration;
 use tokio::time::timeout;
@@ -24,20 +23,8 @@ impl ProxyHttp2Connector {
     }
 }
 
-impl HttpConnector for ProxyHttp2Connector {
-    type Connection<B>
-        = Http2Connection<B>
-    where
-        B: Body + Unpin + Send + Sync + 'static,
-        B::Data: Send,
-        B::Error: Into<Box<dyn std::error::Error + Send + Sync>>;
-
-    async fn create_connection<B>(&self, target_uri: &hyper::Uri) -> Result<Self::Connection<B>, anyhow::Error>
-    where
-        B: Body + 'static + Unpin + Send + Sync,
-        B::Data: Send,
-        B::Error: Into<Box<dyn std::error::Error + Send + Sync>>,
-    {
+impl Http2Connector for ProxyHttp2Connector {
+    async fn create_connection(&self, target_uri: &hyper::Uri) -> Result<Http2Connection, anyhow::Error> {
         let tcp_stream = create_proxy_tunnel(target_uri, &self.proxy_address, &self.username, &self.password, "2.0").await?;
         let tls = create_tls_connector(true);
         let domain = tokio_rustls::rustls::pki_types::ServerName::try_from(target_uri.host().unwrap().to_string())?;
@@ -52,6 +39,6 @@ impl HttpConnector for ProxyHttp2Connector {
             }
         });
 
-        Ok(Http2Connection { conn: sender })
+        Ok(sender)
     }
 }

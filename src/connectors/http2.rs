@@ -1,26 +1,16 @@
-use super::HttpConnector;
-use crate::{connection::Http2Connection, utils::tls::create_tls_connector};
-use hyper::{body::Body, client::conn::http2};
+use crate::{
+    connectors::types::{Http2Connection, Http2Connector},
+    utils::tls::create_tls_connector,
+};
+use hyper::client::conn::http2;
 use hyper_util::rt::TokioIo;
 use std::time::Duration;
 use tokio::{net::TcpStream, time::timeout};
 
 pub struct SimpleHttp2Connector {}
 
-impl HttpConnector for SimpleHttp2Connector {
-    type Connection<B>
-        = Http2Connection<B>
-    where
-        B: Body + Unpin + Send + Sync + 'static,
-        B::Data: Send,
-        B::Error: Into<Box<dyn std::error::Error + Send + Sync>>;
-
-    async fn create_connection<B>(&self, uri: &hyper::Uri) -> Result<Self::Connection<B>, anyhow::Error>
-    where
-        B: Body + 'static + Unpin + Send + Sync,
-        B::Data: Send,
-        B::Error: Into<Box<dyn std::error::Error + Send + Sync>>,
-    {
+impl Http2Connector for SimpleHttp2Connector {
+    async fn create_connection(&self, uri: &hyper::Uri) -> Result<Http2Connection, anyhow::Error> {
         let authority = uri.authority().unwrap();
         let socket_address = if !authority.as_str().contains(":") {
             // Add the default port 443 for HTTPS
@@ -43,6 +33,6 @@ impl HttpConnector for SimpleHttp2Connector {
             }
         });
 
-        Ok(Http2Connection { conn: sender })
+        Ok(sender)
     }
 }

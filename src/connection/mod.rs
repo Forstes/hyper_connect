@@ -2,10 +2,7 @@ use hyper::body::{Body, Incoming};
 use std::future::Future;
 
 pub trait HttpConnection<B: Body> {
-    fn send_request(
-        &mut self,
-        req: hyper::Request<B>,
-    ) -> impl Future<Output = Result<hyper::Response<Incoming>, hyper::Error>> + Send;
+    fn send_request(&mut self, req: hyper::Request<B>) -> impl Future<Output = Result<hyper::Response<Incoming>, hyper::Error>> + Send;
     fn is_conn_ready(&self) -> bool;
     fn is_conn_closed(&self) -> bool;
 }
@@ -38,7 +35,8 @@ pub struct Http2Connection<B: Body + 'static> {
 #[cfg(any(feature = "http2", feature = "http2_proxy"))]
 impl<B: Body + Send + 'static> HttpConnection<B> for Http2Connection<B> {
     async fn send_request(&mut self, req: hyper::Request<B>) -> Result<hyper::Response<Incoming>, hyper::Error> {
-        self.conn.send_request(req).await
+        let mut conn = self.conn.clone();
+        conn.send_request(req).await
     }
 
     fn is_conn_ready(&self) -> bool {
