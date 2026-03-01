@@ -21,11 +21,12 @@ webpki-roots = "0.26.6"
 
 [features]
 default = ["http2"]
-full = ["http1", "http1_proxy", "http2", "http2_proxy"]
+full = ["http1", "http1_proxy", "http2", "http2_proxy", "rate_limit"]
 http1 = []
 http1_proxy = []
 http2 = []
 http2_proxy = []
+rate_limit = []
 
 [dev-dependencies]
 hyper_connect = { path = ".", features = ["full"] }
