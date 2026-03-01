@@ -10,6 +10,11 @@ pub type Http1Connection = http1::SendRequest<Either<Full<Bytes>, Empty<Bytes>>>
 #[cfg(any(feature = "http2", feature = "http2_proxy"))]
 pub type Http2Connection = http2::SendRequest<Either<Full<Bytes>, Empty<Bytes>>>;
 
+#[cfg(any(feature = "http1", feature = "http1_proxy"))]
+pub trait Http1Connector {
+    async fn create_connection(&self, uri: &hyper::Uri) -> Result<Http1Connection, anyhow::Error>;
+}
+
 #[cfg(any(feature = "http2", feature = "http2_proxy"))]
 pub trait Http2Connector {
     async fn create_connection(&self, uri: &hyper::Uri) -> Result<Http2Connection, anyhow::Error>;

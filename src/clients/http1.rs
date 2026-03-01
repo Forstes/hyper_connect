@@ -1,29 +1,28 @@
+use hyper::Method;
+
 pub use crate::clients::traits::HttpClient;
 use crate::{
     clients::traits::Request,
     connectors::http1::SimpleHttp1Connector,
-    handlers::{conn_pool::ConnectionPool, http::HttpHandler},
+    handlers::{http1::Http1Handler, http1_conn_pool::Http1ConnPool},
 };
-use bytes::Bytes;
-use http_body_util::{Either, Empty, Full};
-use hyper::Method;
 
 pub struct Http1Client {
-    handler: HttpHandler<Either<Full<Bytes>, Empty<Bytes>>, SimpleHttp1Connector>,
+    handler: Http1Handler<SimpleHttp1Connector>,
 }
 
 impl Http1Client {
     pub fn new(max_conns_per_host: usize) -> Self {
-        let pool = ConnectionPool::new(SimpleHttp1Connector {}, max_conns_per_host);
-        let handler = HttpHandler::new(pool);
+        let pool = Http1ConnPool::new(SimpleHttp1Connector {}, max_conns_per_host);
+        let handler = Http1Handler::new(pool);
         Self { handler }
     }
 }
 
 impl HttpClient for Http1Client {
-    type Connector = SimpleHttp1Connector;
+    type Handler = Http1Handler<SimpleHttp1Connector>;
 
-    fn get<'a>(&'a self, uri: &'a str) -> Request<'a, Self::Connector> {
+    fn get<'a>(&'a self, uri: &'a str) -> Request<'a, Self::Handler> {
         Request {
             handler: &self.handler,
             uri,
@@ -35,7 +34,7 @@ impl HttpClient for Http1Client {
         }
     }
 
-    fn post<'a>(&'a self, uri: &'a str) -> Request<'a, Self::Connector> {
+    fn post<'a>(&'a self, uri: &'a str) -> Request<'a, Self::Handler> {
         Request {
             handler: &self.handler,
             uri,
