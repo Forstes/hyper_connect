@@ -3,7 +3,7 @@ use serde_json::Value;
 
 #[tokio::test]
 async fn test_request() {
-    let client: Http2Client = Http2Client::new(1);
+    let client: Http2Client = Http2Client::new();
 
     let resp = client
         .get("https://api1.binance.com/api/v3/time")

@@ -10,7 +10,7 @@ async fn test_request() {
     let proxy_username = env::var("PROXY_USERNAME").expect("PROXY_USERNAME must be set");
     let proxy_password = env::var("PROXY_PASSWORD").expect("PROXY_PASSWORD must be set");
 
-    let client = Http2ProxyClient::new(proxy_address, proxy_username, proxy_password, 1);
+    let client = Http2ProxyClient::new(proxy_address, proxy_username, proxy_password);
 
     let resp = client
         .get("https://www.randomnumberapi.com/api/v1.0/random")
