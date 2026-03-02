@@ -2,7 +2,7 @@ use hyper::Method;
 
 pub use crate::clients::traits::HttpClient;
 use crate::{
-    clients::traits::Request,
+    clients::request::Request,
     connectors::http1::SimpleHttp1Connector,
     handlers::{http1::Http1Handler, http1_conn_pool::Http1ConnPool},
 };

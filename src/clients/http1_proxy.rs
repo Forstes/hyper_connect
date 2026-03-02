@@ -1,6 +1,6 @@
 pub use crate::clients::traits::HttpClient;
 use crate::{
-    clients::traits::Request,
+    clients::request::Request,
     connectors::http1_proxy::ProxyHttp1Connector,
     handlers::{http1::Http1Handler, http1_conn_pool::Http1ConnPool},
 };

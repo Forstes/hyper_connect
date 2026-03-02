@@ -6,4 +6,5 @@ pub mod http1_proxy;
 pub mod http2;
 #[cfg(feature = "http2_proxy")]
 pub mod http2_proxy;
+pub mod request;
 pub mod traits;
