@@ -18,7 +18,7 @@ impl Http2ProxyClient {
     }
 
     #[cfg(feature = "rate_limit")]
-    pub fn new_with_rate_limit(max_burst: u64, refill_per_sec: u64, proxy_address: String, username: String, password: String) -> Self {
+    pub fn new_with_rate_limit(max_burst: u64, refill_per_sec: f64, proxy_address: String, username: String, password: String) -> Self {
         let pool = Http2ConnPool::new(ProxyHttp2Connector::new(proxy_address, username, password));
         let handler = Http2Handler::new_with_rate_limit(pool, max_burst, refill_per_sec);
         Self { handler }

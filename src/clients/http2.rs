@@ -18,7 +18,7 @@ impl Http2Client {
     }
 
     #[cfg(feature = "rate_limit")]
-    pub fn new_with_rate_limit(max_burst: u64, refill_per_sec: u64) -> Self {
+    pub fn new_with_rate_limit(max_burst: u64, refill_per_sec: f64) -> Self {
         let pool = Http2ConnPool::new(SimpleHttp2Connector {});
         let handler = Http2Handler::new_with_rate_limit(pool, max_burst, refill_per_sec);
         Self { handler }

@@ -24,7 +24,7 @@ async fn test_request() {
 async fn rate_limiter_enforces_delay() {
     // Allow 2 immediate requests
     // Refill 1 request per second
-    let client = Http2Client::new_with_rate_limit(2, 1);
+    let client = Http2Client::new_with_rate_limit(2, 1.0);
 
     let start = Instant::now();
 

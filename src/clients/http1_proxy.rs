@@ -20,7 +20,7 @@ impl Http1ProxyClient {
     #[cfg(feature = "rate_limit")]
     pub fn new_with_rate_limit(
         max_burst: u64,
-        refill_per_sec: u64,
+        refill_per_sec: f64,
         proxy_address: String,
         username: String,
         password: String,

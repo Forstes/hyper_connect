@@ -19,7 +19,7 @@ impl Http1Client {
     }
 
     #[cfg(feature = "rate_limit")]
-    pub fn new_with_rate_limit(max_burst: u64, refill_per_sec: u64, max_conns_per_host: usize) -> Self {
+    pub fn new_with_rate_limit(max_burst: u64, refill_per_sec: f64, max_conns_per_host: usize) -> Self {
         let pool = Http1ConnPool::new(SimpleHttp1Connector {}, max_conns_per_host);
         let handler = Http1Handler::new_with_rate_limit(pool, max_burst, refill_per_sec);
         Self { handler }

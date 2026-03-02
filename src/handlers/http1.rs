@@ -17,12 +17,12 @@ impl<CN: Http1Connector> Http1Handler<CN> {
         Self {
             conn_pool,
             #[cfg(feature = "rate_limit")]
-            rate_limiter: RateLimiter::new(1000, 1),
+            rate_limiter: RateLimiter::new(1000, 1.0),
         }
     }
 
     #[cfg(feature = "rate_limit")]
-    pub fn new_with_rate_limit(conn_pool: Http1ConnPool<CN>, capacity: u64, refill_per_sec: u64) -> Self {
+    pub fn new_with_rate_limit(conn_pool: Http1ConnPool<CN>, capacity: u64, refill_per_sec: f64) -> Self {
         Self {
             conn_pool,
             rate_limiter: RateLimiter::new(capacity, refill_per_sec),

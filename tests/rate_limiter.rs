@@ -3,7 +3,7 @@ use std::time::{Duration, Instant};
 
 #[tokio::test]
 async fn rate_is_respected_over_time() {
-    let limiter = RateLimiter::new(1, 1);
+    let limiter = RateLimiter::new(1, 1.0);
 
     let start = Instant::now();
 
