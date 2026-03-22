@@ -1,5 +1,5 @@
 use crate::{
-    connectors::types::{Http2Connection, Http2Connector},
+    connectors::types::{Http2Connection, Http2Connector, Http2Sender},
     utils::tls::create_tls_connector,
 };
 use hyper::client::conn::http2;
@@ -10,7 +10,7 @@ use tokio::{net::TcpStream, time::timeout};
 pub struct SimpleHttp2Connector {}
 
 impl Http2Connector for SimpleHttp2Connector {
-    async fn create_connection(&self, uri: &hyper::Uri) -> Result<Http2Connection, anyhow::Error> {
+    async fn create_connection(&self, uri: &hyper::Uri) -> Result<(Http2Sender, Http2Connection), anyhow::Error> {
         let authority = uri.authority().unwrap();
         let socket_address = if !authority.as_str().contains(":") {
             // Add the default port 443 for HTTPS
@@ -27,12 +27,6 @@ impl Http2Connector for SimpleHttp2Connector {
 
         let (sender, connection) = timeout(Duration::from_secs(5), http2::handshake(executor, tls_stream)).await??;
 
-        tokio::task::spawn(async move {
-            if let Err(e) = connection.await {
-                eprintln!("HTTP/2 connection error: {}", e);
-            }
-        });
-
-        Ok(sender)
+        Ok((sender, connection))
     }
 }

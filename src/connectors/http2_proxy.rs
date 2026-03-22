@@ -1,5 +1,5 @@
 use crate::{
-    connectors::types::{Http2Connection, Http2Connector},
+    connectors::types::{Http2Connection, Http2Connector, Http2Sender},
     utils::{proxy_tunnel::create_proxy_tunnel, tls::create_tls_connector},
 };
 use hyper::client::conn::http2;
@@ -24,7 +24,7 @@ impl ProxyHttp2Connector {
 }
 
 impl Http2Connector for ProxyHttp2Connector {
-    async fn create_connection(&self, target_uri: &hyper::Uri) -> Result<Http2Connection, anyhow::Error> {
+    async fn create_connection(&self, target_uri: &hyper::Uri) -> Result<(Http2Sender, Http2Connection), anyhow::Error> {
         let tcp_stream = create_proxy_tunnel(target_uri, &self.proxy_address, &self.username, &self.password, "2.0").await?;
         let tls = create_tls_connector(true);
         let domain = tokio_rustls::rustls::pki_types::ServerName::try_from(target_uri.host().unwrap().to_string())?;
@@ -33,12 +33,6 @@ impl Http2Connector for ProxyHttp2Connector {
 
         let (sender, connection) = timeout(Duration::from_secs(5), http2::handshake(executor, tls_stream)).await??;
 
-        tokio::task::spawn(async move {
-            if let Err(e) = connection.await {
-                eprintln!("HTTP/2 connection error: {}", e);
-            }
-        });
-
-        Ok(sender)
+        Ok((sender, connection))
     }
 }
