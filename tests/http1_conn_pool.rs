@@ -1,6 +1,6 @@
 use hyper::Uri;
 use hyper_connect::connectors::http1::SimpleHttp1Connector;
-use hyper_connect::connectors::types::{Http1Connection, Http1Connector};
+use hyper_connect::connectors::types::{Http1Connection, Http1Connector, Http1Sender};
 use hyper_connect::handlers::http1_conn_pool::Http1ConnPool;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -20,7 +20,7 @@ impl CountingConnector {
 }
 
 impl Http1Connector for CountingConnector {
-    async fn create_connection(&self, uri: &Uri) -> Result<Http1Connection, anyhow::Error> {
+    async fn create_connection(&self, uri: &Uri) -> Result<(Http1Sender, Http1Connection), anyhow::Error> {
         self.count.fetch_add(1, Ordering::Relaxed);
         self.real_connector.create_connection(uri).await
     }
@@ -36,11 +36,11 @@ async fn http1_conn_reuse() {
 
     // First request -> creates connection
     let conn1 = pool.get_conn(&uri).await.unwrap();
-    pool.return_conn(&uri, conn1).await;
+    pool.return_conn(conn1).await;
 
     // Second request -> should reuse connection
     let conn2 = pool.get_conn(&uri).await.unwrap();
-    pool.return_conn(&uri, conn2).await;
+    pool.return_conn(conn2).await;
 
     // Only one connection created
     assert_eq!(count.load(Ordering::Relaxed), 1);
@@ -65,8 +65,8 @@ async fn http1_two_connections_parallel() {
 
     let (conn1, conn2) = tokio::join!(t1, t2);
 
-    pool.return_conn(&uri, conn1.unwrap()).await;
-    pool.return_conn(&uri, conn2.unwrap()).await;
+    pool.return_conn(conn1.unwrap()).await;
+    pool.return_conn(conn2.unwrap()).await;
 
     assert_eq!(count.load(Ordering::Relaxed), 2);
 }

@@ -1,5 +1,5 @@
 use crate::{
-    connectors::types::{Http1Connection, Http1Connector},
+    connectors::types::{Http1Connection, Http1Connector, Http1Sender},
     utils::tls::create_tls_connector,
 };
 use hyper::client::conn::http1;
@@ -10,7 +10,7 @@ use tokio::{net::TcpStream, time::timeout};
 pub struct SimpleHttp1Connector {}
 
 impl Http1Connector for SimpleHttp1Connector {
-    async fn create_connection(&self, uri: &hyper::Uri) -> Result<Http1Connection, anyhow::Error> {
+    async fn create_connection(&self, uri: &hyper::Uri) -> Result<(Http1Sender, Http1Connection), anyhow::Error> {
         let authority = uri.authority().unwrap();
         let socket_address = if !authority.as_str().contains(":") {
             // Add the default port 443 for HTTPS
@@ -26,12 +26,6 @@ impl Http1Connector for SimpleHttp1Connector {
 
         let (sender, connection) = timeout(Duration::from_secs(5), http1::handshake(tls_stream)).await??;
 
-        tokio::task::spawn(async move {
-            if let Err(e) = connection.await {
-                eprintln!("HTTP/1 connection error: {}", e);
-            }
-        });
-
-        Ok(sender)
+        Ok((sender, connection))
     }
 }

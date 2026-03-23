@@ -37,11 +37,11 @@ impl<CN: Http1Connector + Send + Sync> HttpHandler for Http1Handler<CN> {
         #[cfg(feature = "rate_limit")]
         self.rate_limiter.acquire().await;
 
-        let resp = conn.send_request(request).await?;
+        let resp = conn.sender.send_request(request).await?;
         let status = resp.status();
         let collected = resp.into_body().collect().await?;
 
-        self.conn_pool.return_conn(uri, conn).await;
+        self.conn_pool.return_conn(conn).await;
 
         Ok((status, collected.to_bytes()))
     }

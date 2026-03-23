@@ -1,12 +1,31 @@
-use crate::connectors::types::{Http1Connection, Http1Connector};
+use crate::connectors::types::{Http1Connector, Http1Sender};
 use hyper::Uri;
-use std::{collections::HashMap, sync::Arc};
-use tokio::sync::Mutex;
+use std::collections::HashMap;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc, Mutex,
+};
+use tokio::sync::Mutex as AsyncMutex;
+
+struct Conn {
+    sender: Http1Sender,
+    is_alive: Arc<AtomicBool>,
+}
+
+struct ConnEntry {
+    conns: AsyncMutex<Vec<Conn>>,
+}
+
+pub struct PooledHttp1 {
+    pub sender: Http1Sender,
+    is_alive: Arc<AtomicBool>,
+    entry: Arc<ConnEntry>,
+}
 
 pub struct Http1ConnPool<CN: Http1Connector> {
     connector: CN,
     max_conns_per_host: usize,
-    pool: Arc<Mutex<HashMap<String, Vec<Http1Connection>>>>,
+    pool: Mutex<HashMap<String, Arc<ConnEntry>>>,
 }
 
 impl<CN: Http1Connector> Http1ConnPool<CN> {
@@ -14,48 +33,76 @@ impl<CN: Http1Connector> Http1ConnPool<CN> {
         Self {
             connector,
             max_conns_per_host,
-            pool: Arc::new(Mutex::new(HashMap::new())),
+            pool: Mutex::new(HashMap::new()),
         }
     }
 
-    pub async fn get_conn(&self, uri: &Uri) -> Result<Http1Connection, anyhow::Error> {
+    pub async fn get_conn(&self, uri: &Uri) -> Result<PooledHttp1, anyhow::Error> {
         let authority = uri.authority().ok_or_else(|| anyhow::anyhow!("Missing authority"))?.as_str().to_string();
 
-        // Try take existing connection
-        {
-            let mut pool = self.pool.lock().await;
+        let entry = {
+            let mut map = self.pool.lock().unwrap();
+            map.entry(authority)
+                .or_insert_with(|| {
+                    Arc::new(ConnEntry {
+                        conns: AsyncMutex::new(Vec::new()),
+                    })
+                })
+                .clone()
+        };
 
-            if let Some(conns) = pool.get_mut(&authority) {
-                while let Some(conn) = conns.pop() {
-                    if !conn.is_closed() {
-                        return Ok(conn);
-                    }
-                    // Drop closed connection silently
+        // reuse
+        {
+            let mut conns = entry.conns.lock().await;
+
+            while let Some(conn) = conns.pop() {
+                if conn.is_alive.load(Ordering::Acquire) {
+                    return Ok(PooledHttp1 {
+                        sender: conn.sender,
+                        is_alive: conn.is_alive,
+                        entry: entry.clone(),
+                    });
                 }
             }
         }
 
-        // No available connection -> create new
-        self.connector.create_connection(uri).await
+        // create
+        let (sender, connection) = self.connector.create_connection(uri).await?;
+
+        let is_alive = Arc::new(AtomicBool::new(true));
+
+        let entry_clone = entry.clone();
+        let is_alive_clone = is_alive.clone();
+
+        tokio::spawn(async move {
+            let res = connection.await;
+
+            if let Err(e) = &res {
+                eprintln!("HTTP/1 connection error: {}", e);
+            }
+
+            is_alive_clone.store(false, Ordering::Release);
+
+            let mut conns = entry_clone.conns.lock().await;
+            conns.retain(|c| !Arc::ptr_eq(&c.is_alive, &is_alive_clone));
+        });
+
+        Ok(PooledHttp1 { sender, is_alive, entry })
     }
 
-    /// Return connection back to pool
-    pub async fn return_conn(&self, uri: &Uri, conn: Http1Connection) {
-        if conn.is_closed() {
+    pub async fn return_conn(&self, conn: PooledHttp1) {
+        if !conn.is_alive.load(Ordering::Acquire) {
             return;
         }
 
-        let authority = match uri.authority() {
-            Some(a) => a.as_str().to_string(),
-            None => return,
-        };
-
-        let mut pool = self.pool.lock().await;
-        let conns = pool.entry(authority).or_default();
+        let mut conns = conn.entry.conns.lock().await;
 
         if conns.len() < self.max_conns_per_host {
-            conns.push(conn);
+            conns.push(Conn {
+                sender: conn.sender,
+                is_alive: conn.is_alive,
+            });
         }
-        // else: drop it
+        // else drop
     }
 }
