@@ -37,7 +37,7 @@ impl<CN: Http1Connector + Send + Sync> HttpHandler for Http1Handler<CN> {
         #[cfg(feature = "rate_limit")]
         self.rate_limiter.acquire().await;
 
-        let resp = conn.sender.send_request(request).await?;
+        let resp = tokio::time::timeout(std::time::Duration::from_secs(5), conn.sender.send_request(request)).await??;
         let status = resp.status();
         let collected = resp.into_body().collect().await?;
 
