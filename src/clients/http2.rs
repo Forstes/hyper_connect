@@ -1,4 +1,4 @@
-pub use crate::clients::traits::HttpClient;
+pub use crate::clients::{request::RetryPolicy, traits::HttpClient};
 use crate::{
     clients::request::Request,
     connectors::http2::SimpleHttp2Connector,
@@ -8,20 +8,31 @@ use hyper::Method;
 
 pub struct Http2Client {
     handler: Http2Handler<SimpleHttp2Connector>,
+    retry_policy: Option<RetryPolicy>,
 }
 
 impl Http2Client {
     pub fn new() -> Self {
         let pool = Http2ConnPool::new(SimpleHttp2Connector {});
         let handler = Http2Handler::new(pool);
-        Self { handler }
+        Self { handler, retry_policy: None }
     }
 
     #[cfg(feature = "rate_limit")]
     pub fn new_with_rate_limit(max_burst: u64, refill_per_sec: f64) -> Self {
         let pool = Http2ConnPool::new(SimpleHttp2Connector {});
         let handler = Http2Handler::new_with_rate_limit(pool, max_burst, refill_per_sec);
-        Self { handler }
+        Self { handler, retry_policy: None }
+    }
+
+    #[cfg(feature = "rate_limit")]
+    pub fn new_with_rate_limit_and_retry(max_burst: u64, refill_per_sec: f64, retry_policy: RetryPolicy) -> Self {
+        let pool = Http2ConnPool::new(SimpleHttp2Connector {});
+        let handler = Http2Handler::new_with_rate_limit(pool, max_burst, refill_per_sec);
+        Self {
+            handler,
+            retry_policy: Some(retry_policy),
+        }
     }
 }
 
@@ -37,6 +48,7 @@ impl HttpClient for Http2Client {
             body: None,
             headers: Vec::new(),
             include_host_header: false,
+            retry_policy: self.retry_policy.clone(),
         }
     }
 
@@ -49,6 +61,7 @@ impl HttpClient for Http2Client {
             body: None,
             headers: Vec::new(),
             include_host_header: false,
+            retry_policy: self.retry_policy.clone(),
         }
     }
 }

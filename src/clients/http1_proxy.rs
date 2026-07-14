@@ -44,6 +44,7 @@ impl HttpClient for Http1ProxyClient {
             body: None,
             headers: Vec::new(),
             include_host_header: true,
+            retry_policy: None,
         }
     }
 
@@ -56,6 +57,7 @@ impl HttpClient for Http1ProxyClient {
             body: None,
             headers: Vec::new(),
             include_host_header: true,
+            retry_policy: None,
         }
     }
 }

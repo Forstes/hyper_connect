@@ -37,6 +37,7 @@ impl HttpClient for Http2ProxyClient {
             body: None,
             headers: Vec::new(),
             include_host_header: false,
+            retry_policy: None,
         }
     }
 
@@ -49,6 +50,7 @@ impl HttpClient for Http2ProxyClient {
             body: None,
             headers: Vec::new(),
             include_host_header: false,
+            retry_policy: None,
         }
     }
 }
