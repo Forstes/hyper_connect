@@ -8,3 +8,5 @@ pub mod http2;
 pub mod http2_proxy;
 pub mod request;
 pub mod traits;
+#[cfg(feature = "websocket")]
+pub mod websocket;
