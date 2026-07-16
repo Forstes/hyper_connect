@@ -53,4 +53,17 @@ impl HttpClient for Http2ProxyClient {
             retry_policy: None,
         }
     }
+
+    fn put<'a>(&'a self, uri: &'a str) -> Request<'a, Self::Handler> {
+        Request {
+            handler: &self.handler,
+            uri,
+            method: Method::PUT,
+            query: String::new(),
+            body: None,
+            headers: Vec::new(),
+            include_host_header: false,
+            retry_policy: None,
+        }
+    }
 }

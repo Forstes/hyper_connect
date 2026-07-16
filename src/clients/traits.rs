@@ -5,4 +5,5 @@ pub trait HttpClient {
 
     fn get<'a>(&'a self, uri: &'a str) -> Request<'a, Self::Handler>;
     fn post<'a>(&'a self, uri: &'a str) -> Request<'a, Self::Handler>;
+    fn put<'a>(&'a self, uri: &'a str) -> Request<'a, Self::Handler>;
 }
