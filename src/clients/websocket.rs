@@ -51,7 +51,8 @@ pub async fn connect(host: &str, path: &str) -> anyhow::Result<WebSocket> {
         .header("Sec-WebSocket-Key", fastwebsockets::handshake::generate_key())
         .header("Sec-WebSocket-Version", "13")
         .body(Empty::<Bytes>::new())?;
-    let (stream, _) = fastwebsockets::handshake::client(&SpawnExecutor, request, tls_stream).await?;
+    let (mut stream, _) = fastwebsockets::handshake::client(&SpawnExecutor, request, tls_stream).await?;
+    stream.set_auto_pong(true);
 
     Ok(FragmentCollector::new(stream))
 }
