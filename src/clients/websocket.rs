@@ -16,6 +16,28 @@ pub use fastwebsockets::OpCode;
 
 pub type WebSocket = FragmentCollector<TokioIo<Upgraded>>;
 
+pub struct TextWebSocketStream {
+    stream: WebSocket,
+}
+
+impl TextWebSocketStream {
+    pub fn new(stream: WebSocket) -> Self {
+        Self { stream }
+    }
+
+    pub async fn next(&mut self) -> anyhow::Result<Bytes> {
+        loop {
+            let frame = self.stream.read_frame().await?;
+
+            match frame.opcode {
+                OpCode::Text => return Ok(Bytes::copy_from_slice(&frame.payload)),
+                OpCode::Close => anyhow::bail!("WebSocket stream closed"),
+                _ => continue,
+            }
+        }
+    }
+}
+
 pub async fn connect(host: &str, path: &str) -> anyhow::Result<WebSocket> {
     let tcp_stream = TcpStream::connect((host, 443)).await?;
     let domain = ServerName::try_from(host.to_owned())?;
