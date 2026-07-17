@@ -67,4 +67,17 @@ impl HttpClient for Http1Client {
             retry_policy: None,
         }
     }
+
+    fn delete<'a>(&'a self, uri: &'a str) -> Request<'a, Self::Handler> {
+        Request {
+            handler: &self.handler,
+            uri,
+            method: Method::DELETE,
+            query: String::new(),
+            body: None,
+            headers: Vec::new(),
+            include_host_header: true,
+            retry_policy: None,
+        }
+    }
 }

@@ -77,4 +77,17 @@ impl HttpClient for Http2Client {
             retry_policy: self.retry_policy.clone(),
         }
     }
+
+    fn delete<'a>(&'a self, uri: &'a str) -> Request<'a, Self::Handler> {
+        Request {
+            handler: &self.handler,
+            uri,
+            method: Method::DELETE,
+            query: String::new(),
+            body: None,
+            headers: Vec::new(),
+            include_host_header: false,
+            retry_policy: self.retry_policy.clone(),
+        }
+    }
 }
