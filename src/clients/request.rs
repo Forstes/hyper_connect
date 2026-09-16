@@ -51,6 +51,12 @@ impl<'a, H: HttpHandler> Request<'a, H> {
         Ok(self)
     }
 
+    pub fn form<S: Serialize>(mut self, v: &S) -> Result<Self, serde_urlencoded::ser::Error> {
+        self.body = Some(serde_urlencoded::to_string(v)?.into_bytes());
+        self.headers.push(("Content-Type", "application/x-www-form-urlencoded".to_string()));
+        Ok(self)
+    }
+
     pub fn headers(mut self, mut headers: Vec<(&'a str, String)>) -> Self {
         self.headers.append(&mut headers);
         self
