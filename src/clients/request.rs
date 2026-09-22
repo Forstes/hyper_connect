@@ -1,7 +1,7 @@
 use crate::handlers::traits::HttpHandler;
 use bytes::Bytes;
 use http_body_util::{Either, Empty, Full};
-use hyper::{Method, Uri};
+use hyper::{Method, StatusCode, Uri};
 use serde::{de::DeserializeOwned, Serialize};
 use serde_json::de::SliceRead;
 use std::time::Duration;
@@ -104,6 +104,15 @@ impl<'a, H: HttpHandler> Request<'a, H> {
 
             match self.handler.request(&uri, builder.body(body_data)?).await {
                 Ok((status, body)) if status.is_success() => return Ok(ResponseData { data: body }),
+                Ok((status, _)) if is_retryable_status(status) && attempt + 1 < max_attempts => {
+                    tokio::time::sleep(
+                        retry_policy
+                            .as_ref()
+                            .expect("retry policy must exist when retrying")
+                            .delay_for_retry(attempt),
+                    )
+                    .await;
+                }
                 Ok((status, body)) => {
                     return Err(anyhow::anyhow!(
                         "Request failed with status {}: {}",
@@ -126,6 +135,10 @@ impl<'a, H: HttpHandler> Request<'a, H> {
 
         unreachable!("retry loop must return a response or error")
     }
+}
+
+fn is_retryable_status(status: StatusCode) -> bool {
+    status == StatusCode::REQUEST_TIMEOUT || status == StatusCode::TOO_MANY_REQUESTS || status.is_server_error()
 }
 
 pub struct ResponseData {
@@ -151,6 +164,20 @@ mod tests {
         attempts: AtomicUsize,
     }
 
+    struct StatusFlakyHandler {
+        attempts: AtomicUsize,
+    }
+
+    impl HttpHandler for StatusFlakyHandler {
+        async fn request(&self, _: &Uri, _: hyper::Request<Either<Full<Bytes>, Empty<Bytes>>>) -> Result<(hyper::StatusCode, Bytes), anyhow::Error> {
+            if self.attempts.fetch_add(1, Ordering::SeqCst) == 0 {
+                return Ok((hyper::StatusCode::SERVICE_UNAVAILABLE, Bytes::new()));
+            }
+
+            Ok((hyper::StatusCode::OK, Bytes::from_static(b"{}")))
+        }
+    }
+
     impl HttpHandler for FlakyHandler {
         async fn request(&self, _: &Uri, _: hyper::Request<Either<Full<Bytes>, Empty<Bytes>>>) -> Result<(hyper::StatusCode, Bytes), anyhow::Error> {
             if self.attempts.fetch_add(1, Ordering::SeqCst) == 0 {
@@ -164,6 +191,27 @@ mod tests {
     #[tokio::test]
     async fn retries_safe_requests_after_transport_errors() {
         let handler = FlakyHandler {
+            attempts: AtomicUsize::new(0),
+        };
+        let request = Request {
+            handler: &handler,
+            uri: "https://example.com",
+            method: Method::GET,
+            query: String::new(),
+            body: None,
+            headers: Vec::new(),
+            include_host_header: false,
+            retry_policy: Some(RetryPolicy::new(2, Duration::ZERO)),
+        };
+
+        request.send().await.unwrap();
+
+        assert_eq!(handler.attempts.load(Ordering::SeqCst), 2);
+    }
+
+    #[tokio::test]
+    async fn retries_safe_requests_after_transient_statuses() {
+        let handler = StatusFlakyHandler {
             attempts: AtomicUsize::new(0),
         };
         let request = Request {
