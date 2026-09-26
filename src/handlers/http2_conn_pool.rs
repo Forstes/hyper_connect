@@ -65,9 +65,7 @@ where
 
         let entry_clone = entry.clone();
         tokio::task::spawn(async move {
-            if let Err(e) = connection.await {
-                eprintln!("HTTP/2 connection error: {}", e);
-            }
+            let _ = connection.await;
 
             entry_clone.is_alive.store(false, Ordering::Release);
             let mut lock = entry_clone.sender.lock().await;
