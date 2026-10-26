@@ -4,7 +4,7 @@ use crate::handlers::rate_limiter::RateLimiter;
 use crate::{connectors::types::Http2Connector, handlers::traits::HttpHandler};
 use bytes::Bytes;
 use http_body_util::{BodyExt, Either, Empty, Full};
-use hyper::{Request, StatusCode, Uri};
+use hyper::{header::HeaderMap, Request, StatusCode, Uri};
 
 pub struct Http2Handler<CN: Http2Connector> {
     conn_pool: Http2ConnPool<CN>,
@@ -31,7 +31,7 @@ impl<CN: Http2Connector> Http2Handler<CN> {
 }
 
 impl<CN: Http2Connector + Send + Sync> HttpHandler for Http2Handler<CN> {
-    async fn request(&self, uri: &Uri, request: Request<Either<Full<Bytes>, Empty<Bytes>>>) -> Result<(StatusCode, Bytes), anyhow::Error> {
+    async fn request(&self, uri: &Uri, request: Request<Either<Full<Bytes>, Empty<Bytes>>>) -> Result<(StatusCode, HeaderMap, Bytes), anyhow::Error> {
         let mut conn = self.conn_pool.get_conn(uri).await?;
 
         #[cfg(feature = "rate_limit")]
@@ -39,8 +39,9 @@ impl<CN: Http2Connector + Send + Sync> HttpHandler for Http2Handler<CN> {
 
         let resp = tokio::time::timeout(std::time::Duration::from_secs(5), conn.send_request(request)).await??;
         let status = resp.status();
+        let headers = resp.headers().clone();
         let collected = resp.into_body().collect().await?;
 
-        Ok((status, collected.to_bytes()))
+        Ok((status, headers, collected.to_bytes()))
     }
 }

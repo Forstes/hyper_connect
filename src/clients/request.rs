@@ -1,7 +1,7 @@
 use crate::handlers::traits::HttpHandler;
 use bytes::Bytes;
 use http_body_util::{Either, Empty, Full};
-use hyper::{Method, StatusCode, Uri};
+use hyper::{header::LOCATION, Method, StatusCode, Uri};
 use serde::{de::DeserializeOwned, Serialize};
 use serde_json::de::SliceRead;
 use std::time::Duration;
@@ -83,58 +83,118 @@ impl<'a, H: HttpHandler> Request<'a, H> {
             .filter(|_| self.body.is_none() && (self.method == Method::GET || self.method == Method::HEAD));
         let max_attempts = retry_policy.as_ref().map_or(1, |policy| policy.max_attempts);
 
-        for attempt in 0..max_attempts {
-            let mut builder = hyper::Request::builder()
-                .method(&self.method)
-                .uri(&uri)
-                .header("User-Agent", "RustClient/1.0");
+        'attempts: for attempt in 0..max_attempts {
+            let mut current_uri = uri.clone();
+            let mut redirects = 0;
+            loop {
+                let mut builder = hyper::Request::builder()
+                    .method(&self.method)
+                    .uri(&current_uri)
+                    .header("User-Agent", "RustClient/1.0");
 
-            if self.include_host_header {
-                builder = builder.header("HOST", uri.host().unwrap_or_default());
-            }
-
-            for (key, value) in &self.headers {
-                builder = builder.header(*key, value);
-            }
-
-            let body_data = match &self.body {
-                Some(body) => Either::Left(Full::from(body.clone())),
-                None => Either::Right(Empty::<Bytes>::new()),
-            };
-
-            match self.handler.request(&uri, builder.body(body_data)?).await {
-                Ok((status, body)) if status.is_success() => return Ok(ResponseData { data: body }),
-                Ok((status, _)) if is_retryable_status(status) && attempt + 1 < max_attempts => {
-                    tokio::time::sleep(
-                        retry_policy
-                            .as_ref()
-                            .expect("retry policy must exist when retrying")
-                            .delay_for_retry(attempt),
-                    )
-                    .await;
+                if self.include_host_header {
+                    builder = builder.header("HOST", current_uri.host().unwrap_or_default());
                 }
-                Ok((status, body)) => {
-                    return Err(anyhow::anyhow!(
-                        "Request failed with status {}: {}",
-                        status,
-                        String::from_utf8_lossy(&body)
-                    ));
+
+                for (key, value) in &self.headers {
+                    if current_uri.authority() != uri.authority()
+                        && (key.eq_ignore_ascii_case("authorization") || key.eq_ignore_ascii_case("x-api-key") || key.eq_ignore_ascii_case("cookie"))
+                    {
+                        continue;
+                    }
+                    builder = builder.header(*key, value);
                 }
-                Err(_) if attempt + 1 < max_attempts => {
-                    tokio::time::sleep(
-                        retry_policy
-                            .as_ref()
-                            .expect("retry policy must exist when retrying")
-                            .delay_for_retry(attempt),
-                    )
-                    .await;
+
+                let body_data = match &self.body {
+                    Some(body) => Either::Left(Full::from(body.clone())),
+                    None => Either::Right(Empty::<Bytes>::new()),
+                };
+
+                match self.handler.request(&current_uri, builder.body(body_data)?).await {
+                    Ok((status, _, body)) if status.is_success() => return Ok(ResponseData { data: body }),
+                    Ok((status, headers, _))
+                        if self.method == Method::GET
+                            && matches!(
+                                status,
+                                StatusCode::MOVED_PERMANENTLY
+                                    | StatusCode::FOUND
+                                    | StatusCode::SEE_OTHER
+                                    | StatusCode::TEMPORARY_REDIRECT
+                                    | StatusCode::PERMANENT_REDIRECT
+                            ) =>
+                    {
+                        if redirects >= 10 {
+                            anyhow::bail!("too many redirects");
+                        }
+                        let location = headers
+                            .get(LOCATION)
+                            .ok_or_else(|| anyhow::anyhow!("redirect response has no Location header"))?
+                            .to_str()?;
+                        current_uri = resolve_redirect(&current_uri, location)?;
+                        redirects += 1;
+                        continue;
+                    }
+                    Ok((status, _, _)) if is_retryable_status(status) && attempt + 1 < max_attempts => {
+                        tokio::time::sleep(
+                            retry_policy
+                                .as_ref()
+                                .expect("retry policy must exist when retrying")
+                                .delay_for_retry(attempt),
+                        )
+                        .await;
+                        continue 'attempts;
+                    }
+                    Ok((status, _, body)) => {
+                        return Err(anyhow::anyhow!(
+                            "Request failed with status {}: {}",
+                            status,
+                            String::from_utf8_lossy(&body)
+                        ));
+                    }
+                    Err(_) if attempt + 1 < max_attempts => {
+                        tokio::time::sleep(
+                            retry_policy
+                                .as_ref()
+                                .expect("retry policy must exist when retrying")
+                                .delay_for_retry(attempt),
+                        )
+                        .await;
+                        continue 'attempts;
+                    }
+                    Err(error) => return Err(error),
                 }
-                Err(error) => return Err(error),
             }
         }
 
         unreachable!("retry loop must return a response or error")
     }
+}
+
+fn resolve_redirect(base: &Uri, location: &str) -> Result<Uri, anyhow::Error> {
+    if location.starts_with("http:") || location.contains('#') {
+        anyhow::bail!("unsupported redirect URL");
+    }
+    let target = if location.starts_with("https://") {
+        location.to_owned()
+    } else if location.starts_with("//") {
+        format!("https:{location}")
+    } else {
+        let authority = base.authority().ok_or_else(|| anyhow::anyhow!("redirect base has no authority"))?;
+        let path = if location.starts_with('/') {
+            location.to_owned()
+        } else if location.starts_with('?') {
+            format!("{}{}", base.path(), location)
+        } else {
+            let parent = base.path().rsplit_once('/').map_or("/", |(parent, _)| parent);
+            format!("{parent}/{location}")
+        };
+        format!("https://{authority}{path}")
+    };
+    let uri: Uri = target.parse()?;
+    if uri.scheme_str() != Some("https") || uri.host().is_none() {
+        anyhow::bail!("redirect must use HTTPS");
+    }
+    Ok(uri)
 }
 
 fn is_retryable_status(status: StatusCode) -> bool {
@@ -168,23 +228,75 @@ mod tests {
         attempts: AtomicUsize,
     }
 
+    struct RedirectHandler {
+        attempts: AtomicUsize,
+    }
+
+    impl HttpHandler for RedirectHandler {
+        async fn request(
+            &self,
+            uri: &Uri,
+            request: hyper::Request<Either<Full<Bytes>, Empty<Bytes>>>,
+        ) -> Result<(hyper::StatusCode, hyper::header::HeaderMap, Bytes), anyhow::Error> {
+            let attempt = self.attempts.fetch_add(1, Ordering::SeqCst);
+            if attempt == 0 {
+                assert_eq!(uri.host(), Some("example.com"));
+                assert_eq!(request.headers()["x-api-key"], "secret");
+                let mut headers = hyper::header::HeaderMap::new();
+                headers.insert(LOCATION, "https://cdn.example.net/file".parse()?);
+                return Ok((StatusCode::FOUND, headers, Bytes::new()));
+            }
+            assert_eq!(uri.host(), Some("cdn.example.net"));
+            assert!(!request.headers().contains_key("x-api-key"));
+            assert_eq!(request.headers()["host"], "cdn.example.net");
+            Ok((StatusCode::OK, hyper::header::HeaderMap::new(), Bytes::from_static(b"file")))
+        }
+    }
+
+    #[tokio::test]
+    async fn follows_redirect_without_forwarding_api_key_to_new_host() {
+        let handler = RedirectHandler {
+            attempts: AtomicUsize::new(0),
+        };
+        let request = Request {
+            handler: &handler,
+            uri: "https://example.com/start",
+            method: Method::GET,
+            query: String::new(),
+            body: None,
+            headers: vec![("x-api-key", "secret".into())],
+            include_host_header: true,
+            retry_policy: None,
+        };
+        assert_eq!(request.send().await.unwrap().data, Bytes::from_static(b"file"));
+        assert_eq!(handler.attempts.load(Ordering::SeqCst), 2);
+    }
+
     impl HttpHandler for StatusFlakyHandler {
-        async fn request(&self, _: &Uri, _: hyper::Request<Either<Full<Bytes>, Empty<Bytes>>>) -> Result<(hyper::StatusCode, Bytes), anyhow::Error> {
+        async fn request(
+            &self,
+            _: &Uri,
+            _: hyper::Request<Either<Full<Bytes>, Empty<Bytes>>>,
+        ) -> Result<(hyper::StatusCode, hyper::header::HeaderMap, Bytes), anyhow::Error> {
             if self.attempts.fetch_add(1, Ordering::SeqCst) == 0 {
-                return Ok((hyper::StatusCode::SERVICE_UNAVAILABLE, Bytes::new()));
+                return Ok((hyper::StatusCode::SERVICE_UNAVAILABLE, hyper::header::HeaderMap::new(), Bytes::new()));
             }
 
-            Ok((hyper::StatusCode::OK, Bytes::from_static(b"{}")))
+            Ok((hyper::StatusCode::OK, hyper::header::HeaderMap::new(), Bytes::from_static(b"{}")))
         }
     }
 
     impl HttpHandler for FlakyHandler {
-        async fn request(&self, _: &Uri, _: hyper::Request<Either<Full<Bytes>, Empty<Bytes>>>) -> Result<(hyper::StatusCode, Bytes), anyhow::Error> {
+        async fn request(
+            &self,
+            _: &Uri,
+            _: hyper::Request<Either<Full<Bytes>, Empty<Bytes>>>,
+        ) -> Result<(hyper::StatusCode, hyper::header::HeaderMap, Bytes), anyhow::Error> {
             if self.attempts.fetch_add(1, Ordering::SeqCst) == 0 {
                 anyhow::bail!("deadline has elapsed");
             }
 
-            Ok((hyper::StatusCode::OK, Bytes::from_static(b"{}")))
+            Ok((hyper::StatusCode::OK, hyper::header::HeaderMap::new(), Bytes::from_static(b"{}")))
         }
     }
 
